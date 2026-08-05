@@ -138,7 +138,7 @@ All settings are controlled via `.env` (copy from `.env.example`):
 - [x] ChromaDB persistent vector store
 - [x] Cross-encoder reranking
 - [x] Groq LLM generation with anti-hallucination guardrails
-- [ ] **OCR support** — PDF, scanned images, DOCX (next iteration)
+- [x] **OCR support** — PDF, scanned images, DOCX
 - [ ] REST API (FastAPI)
 - [ ] Multi-document querying with metadata filters
 - [ ] RAGAS evaluation pipeline

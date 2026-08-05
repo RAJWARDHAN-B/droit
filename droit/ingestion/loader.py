@@ -65,16 +65,12 @@ def load_document(file_path: str | Path) -> str:
     if suffix == ".txt":
         return _load_txt(path)
 
-    # -----------------------------------------------------------------------
-    # OCR PLACEHOLDER — expand this block in the next iteration
-    # -----------------------------------------------------------------------
-    # elif suffix == ".pdf":
-    #     return _load_pdf_ocr(path)
-    # elif suffix in (".png", ".jpg", ".jpeg", ".tiff"):
-    #     return _load_image_ocr(path)
-    # elif suffix == ".docx":
-    #     return _load_docx(path)
-    # -----------------------------------------------------------------------
+    elif suffix == ".pdf":
+        return _load_pdf_ocr(path)
+    elif suffix in (".png", ".jpg", ".jpeg", ".tiff"):
+        return _load_image_ocr(path)
+    elif suffix == ".docx":
+        return _load_docx(path)
 
     raise ValueError(
         f"Unsupported file type '{suffix}'. "
@@ -98,22 +94,55 @@ def _load_txt(path: Path) -> str:
 # OCR stubs (to be implemented in the next iteration)
 # ---------------------------------------------------------------------------
 
-# def _load_pdf_ocr(path: Path) -> str:
-#     """
-#     Extract text from a PDF using pdfplumber for native text and
-#     pytesseract for scanned/image-only pages.
-#     """
-#     import pdfplumber, pytesseract
-#     from PIL import Image
-#     ...
+def _load_pdf_ocr(path: Path) -> str:
+    """
+    Extract text from a PDF using pdfplumber for native text and
+    pytesseract for scanned/image-only pages.
+    """
+    import pdfplumber
+    import pytesseract
 
-# def _load_image_ocr(path: Path) -> str:
-#     """Run pytesseract on a single image file."""
-#     import pytesseract
-#     from PIL import Image
-#     ...
+    text_parts = []
+    try:
+        with pdfplumber.open(path) as pdf:
+            for i, page in enumerate(pdf.pages):
+                page_text = page.extract_text()
+                
+                # If page is mostly image/scanned, native text will be empty or very short
+                if page_text and len(page_text.strip()) > 50:
+                    text_parts.append(page_text)
+                else:
+                    logger.debug("Running OCR on page %d of %s", i + 1, path.name)
+                    # Fallback to OCR on the page image
+                    img = page.to_image(resolution=300).original
+                    ocr_text = pytesseract.image_to_string(img)
+                    text_parts.append(ocr_text)
+                    
+        return "\n\n".join(text_parts)
+    except Exception as exc:
+        logger.error("Failed to extract text from PDF %s: %s", path.name, exc)
+        raise
 
-# def _load_docx(path: Path) -> str:
-#     """Extract text from a .docx file using python-docx."""
-#     import docx
-#     ...
+def _load_image_ocr(path: Path) -> str:
+    """Run pytesseract on a single image file."""
+    import pytesseract
+    from PIL import Image
+    try:
+        logger.debug("Running OCR on image %s", path.name)
+        img = Image.open(path)
+        text = pytesseract.image_to_string(img)
+        return text
+    except Exception as exc:
+        logger.error("Failed to extract text from image %s: %s", path.name, exc)
+        raise
+
+def _load_docx(path: Path) -> str:
+    """Extract text from a .docx file using python-docx."""
+    import docx
+    try:
+        doc = docx.Document(path)
+        text_parts = [para.text for para in doc.paragraphs]
+        return "\n\n".join(text_parts)
+    except Exception as exc:
+        logger.error("Failed to extract text from docx %s: %s", path.name, exc)
+        raise
