@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,9 +28,18 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://droit:droit_secret@localhost:5432/droit_db"
     )
     qdrant_url: str = "http://localhost:6333"
+    qdrant_collection: str = "droit_legal_documents"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     storage_root: Path = PROJECT_ROOT / "storage"
     default_org_id: str = "org_default"
     max_upload_bytes: int = 25 * 1024 * 1024
+    pii_encryption_key: SecretStr | None = None
+    chunk_size: int = 800
+    chunk_overlap: int = 150
+    retrieval_candidate_limit: int = 30
+    retrieval_vector_weight: float = 1.0
+    retrieval_bm25_weight: float = 1.0
+    retrieval_rrf_k: int = 60
 
     @property
     def upload_directory(self) -> Path:

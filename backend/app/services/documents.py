@@ -10,14 +10,23 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from ..config import Settings
-from ..core.ingestion import SUPPORTED_EXTENSIONS, load_document
+from ..core.chunking import split_text
+from ..core.embedding import ChunkVector, VectorIndexer
+from ..core.ingestion import (
+    SUPPORTED_EXTENSIONS,
+    extract_document_metadata,
+    load_document,
+)
+from ..core.pii import anonymize_text, encrypt_value
 from ..models import (
     Document,
+    DocumentChunk,
     DocumentStatus,
     Organization,
+    PIIMapping,
     ProcessingJob,
     ProcessingStage,
 )
@@ -48,6 +57,51 @@ async def get_processing_job(
     return result.scalar_one_or_none()
 
 
+async def delete_document(
+    session: AsyncSession,
+    settings: Settings,
+    document_id: UUID,
+    *,
+    vector_indexer: VectorIndexer,
+) -> bool:
+    """Delete an organization-owned document and all of its stored artifacts."""
+    result = await session.execute(
+        select(Document)
+        .join(Organization)
+        .options(selectinload(Document.chunks))
+        .where(
+            Document.id == document_id,
+            Organization.slug == settings.default_org_id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if document is None:
+        return False
+
+    point_ids = [UUID(chunk.qdrant_point_id) for chunk in document.chunks if chunk.qdrant_point_id]
+    stored_paths = [
+        Path(path)
+        for path in (
+            document.storage_path,
+            document.raw_text_path,
+            document.anonymized_text_path,
+        )
+        if path
+    ]
+
+    try:
+        await vector_indexer.delete(point_ids)
+        await session.delete(document)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    for path in stored_paths:
+        path.unlink(missing_ok=True)
+    return True
+
+
 async def ingest_document(
     session: AsyncSession,
     settings: Settings,
@@ -56,6 +110,7 @@ async def ingest_document(
     media_type: str | None,
     content: bytes,
     idempotency_key: str | None,
+    vector_indexer: VectorIndexer,
 ) -> tuple[ProcessingJob, bool]:
     """Persist and extract a document, returning its durable processing job."""
     safe_filename = _safe_filename(filename)
@@ -76,15 +131,29 @@ async def ingest_document(
         return existing, False
 
     organization = await _get_or_create_organization(session, settings.default_org_id)
+    await session.flush()
     document_id = uuid4()
     original_path = settings.upload_directory / f"{document_id}_original{suffix}"
     raw_text_path = settings.upload_directory / f"{document_id}_raw_text.txt"
+    anonymized_text_path = (
+        settings.upload_directory / f"{document_id}_anonymized_text.txt"
+    )
+    point_ids: list[UUID] = []
 
     try:
         await asyncio.to_thread(_write_atomic, original_path, content)
         extracted_text = await asyncio.to_thread(load_document, original_path)
+        document_metadata = await asyncio.to_thread(
+            extract_document_metadata, original_path, extracted_text
+        )
         await asyncio.to_thread(
             _write_atomic, raw_text_path, extracted_text.encode("utf-8")
+        )
+        anonymized_text, pii_matches = await asyncio.to_thread(
+            anonymize_text, extracted_text
+        )
+        await asyncio.to_thread(
+            _write_atomic, anonymized_text_path, anonymized_text.encode("utf-8")
         )
 
         document = Document(
@@ -94,21 +163,63 @@ async def ingest_document(
             media_type=media_type,
             storage_path=str(original_path),
             raw_text_path=str(raw_text_path),
+            anonymized_text_path=str(anonymized_text_path),
             status=DocumentStatus.PROCESSING,
-            document_metadata={"character_count": len(extracted_text)},
+            document_metadata={
+                **document_metadata,
+                "pii_count": len(pii_matches),
+                "pii_density": len(pii_matches) / max(len(extracted_text), 1),
+            },
+        )
+        document.pii_mappings.extend(
+            PIIMapping(
+                alias=match.alias,
+                entity_type=match.entity_type,
+                original_value_encrypted=encrypt_value(match.original_value, settings),
+            )
+            for match in pii_matches
+        )
+        chunk_texts = split_text(
+            anonymized_text,
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
+        )
+        chunk_vectors = [
+            ChunkVector(point_id=uuid4(), chunk_index=index, text=chunk_text)
+            for index, chunk_text in enumerate(chunk_texts)
+        ]
+        point_ids = [chunk.point_id for chunk in chunk_vectors]
+        await vector_indexer.index(
+            document_id=document_id,
+            organization_id=organization.id,
+            chunks=chunk_vectors,
+        )
+        document.chunks.extend(
+            DocumentChunk(
+                id=chunk.point_id,
+                chunk_index=chunk.chunk_index,
+                text=chunk.text,
+                qdrant_point_id=str(chunk.point_id),
+                chunk_metadata={"filename": safe_filename},
+            )
+            for chunk in chunk_vectors
         )
         job = ProcessingJob(
             document=document,
             idempotency_key=key,
-            stage=ProcessingStage.PII_SCAN,
+            stage=ProcessingStage.DONE,
         )
+        document.status = DocumentStatus.READY
         session.add(job)
         await session.commit()
         return job, True
     except Exception:
         await session.rollback()
+        if point_ids:
+            await vector_indexer.delete(point_ids)
         original_path.unlink(missing_ok=True)
         raw_text_path.unlink(missing_ok=True)
+        anonymized_text_path.unlink(missing_ok=True)
         raise
 
 

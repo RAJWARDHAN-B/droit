@@ -23,11 +23,12 @@ asyncpg==0.30.0
 psycopg[binary]==3.2.9
 
 # ── Database — Vector ─────────────────────────────────────────────────────────
-qdrant-client[fastembed]==1.14.3
+qdrant-client[fastembed]==1.19.0
 
 # ── Auth & Security ───────────────────────────────────────────────────────────
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
+cryptography>=44,<47
 
 # ── PII Detection & Anonymization ─────────────────────────────────────────────
 presidio-analyzer==2.2.358

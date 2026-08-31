@@ -10,7 +10,8 @@
 - **Production vector store target** — Qdrant is provided through Docker Compose
 - **Multi-format backend ingestion** — TXT, PDF, DOCX, CSV, and XLSX extraction
 - **FastAPI foundation** — app factory, environment-backed settings, and versioned health API
-- **Privacy-aware persistence** — original PII values are represented by encrypted-only mapping columns
+- **Privacy-aware processing** — deterministic PII aliases are embedded while encrypted originals remain in PostgreSQL
+- **Hybrid retrieval core** — organization-scoped Qdrant cosine search and BM25 rankings fused with weighted RRF
 
 ---
 
@@ -37,10 +38,18 @@ droit/
 Document (TXT, PDF, DOCX, CSV, XLSX)
      │
      ▼
-[backend loader] → extracted text
+[backend loader] → extracted text + metadata
      │
-     └── next: PII anonymization → chunking → Qdrant indexing
+     ▼
+[PII anonymizer] → encrypted mappings + anonymized text
+     │
+     ▼
+[chunker] → PostgreSQL chunks + Qdrant vectors
+     │
+     └── retrieval core: cosine + BM25 → weighted RRF
 ```
+
+The retrieval core is implemented but is not yet exposed through a RAG query endpoint. Cross-encoder reranking and answer generation remain Phase 1 work.
 
 ---
 
@@ -74,6 +83,8 @@ docker compose up -d postgres qdrant
 
 The liveness endpoint is available at `http://localhost:8000/api/v1/health/live`, and OpenAPI documentation is available at `http://localhost:8000/docs`.
 
+Qdrant and the embedding model are initialized lazily on the first vector operation, so the liveness endpoint remains available even when indexing infrastructure is offline.
+
 ### 5. Run tests
 
 ```bash
@@ -88,7 +99,15 @@ All settings are controlled via `.env` (copy from `.env.example`):
 |---|---|---|
 | `DROIT_DATABASE_URL` | Local PostgreSQL | Async SQLAlchemy connection URL |
 | `DROIT_QDRANT_URL` | `http://localhost:6333` | Qdrant API URL |
+| `DROIT_QDRANT_COLLECTION` | `droit_legal_documents` | Qdrant collection name |
+| `DROIT_EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | FastEmbed model |
 | `DROIT_STORAGE_ROOT` | `./storage` | Local document storage root |
+| `DROIT_CHUNK_SIZE` | `800` | Maximum chunk size in characters |
+| `DROIT_CHUNK_OVERLAP` | `150` | Adjacent chunk overlap in characters |
+| `DROIT_RETRIEVAL_CANDIDATE_LIMIT` | `30` | Candidate count per retrieval source |
+| `DROIT_RETRIEVAL_VECTOR_WEIGHT` | `1.0` | Vector ranking weight in RRF |
+| `DROIT_RETRIEVAL_BM25_WEIGHT` | `1.0` | BM25 ranking weight in RRF |
+| `DROIT_RETRIEVAL_RRF_K` | `60` | RRF rank constant |
 | `DROIT_ENVIRONMENT` | `development` | Runtime environment name |
 | `DROIT_DEBUG` | `false` | FastAPI debug mode |
 
@@ -101,7 +120,10 @@ All settings are controlled via `.env` (copy from `.env.example`):
 - [x] PostgreSQL models for organizations, users, documents, chunks, PII mappings, and jobs
 - [x] Alembic initial migration and schema drift checks
 - [x] Multipart upload, pasted-text ingestion, idempotency, and job status API
-- [ ] PII anonymization and Qdrant indexing
+- [x] Transactional document deletion across PostgreSQL, Qdrant, and local storage
+- [x] Metadata extraction, deterministic PII anonymization, chunking, and Qdrant indexing
+- [x] BM25 and cosine hybrid retrieval with weighted reciprocal rank fusion
+- [ ] Query API, cross-encoder reranking, provider-agnostic generation, and risk scoring
 
 ---
 

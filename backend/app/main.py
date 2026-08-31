@@ -7,10 +7,14 @@ from fastapi import FastAPI
 
 from .api.v1.router import api_router
 from .config import Settings, get_settings
+from .core.embedding import QdrantVectorIndexer, VectorIndexer
 from .database import create_engine, create_session_factory
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    vector_indexer: VectorIndexer | None = None,
+) -> FastAPI:
     """Create and configure an isolated FastAPI application instance."""
     app_settings = settings or get_settings()
 
@@ -20,6 +24,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_engine(app_settings)
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
+        app.state.vector_indexer = vector_indexer or QdrantVectorIndexer(app_settings)
         try:
             yield
         finally:

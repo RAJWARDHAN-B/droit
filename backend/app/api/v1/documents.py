@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_session
 from ...schemas import PasteDocumentRequest, ProcessingJobResponse
-from ...services.documents import get_processing_job, ingest_document, job_response
+from ...services.documents import (
+    delete_document,
+    get_processing_job,
+    ingest_document,
+    job_response,
+)
 
 router = APIRouter(tags=["documents"])
 
@@ -30,6 +35,7 @@ async def upload_document(
             media_type=file.content_type,
             content=content,
             idempotency_key=idempotency_key,
+            vector_indexer=request.app.state.vector_indexer,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -58,6 +64,7 @@ async def paste_document(
             media_type="text/plain",
             content=payload.text.encode("utf-8"),
             idempotency_key=idempotency_key,
+            vector_indexer=request.app.state.vector_indexer,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -76,3 +83,20 @@ async def processing_job(
     if job is None:
         raise HTTPException(status_code=404, detail="Processing job not found")
     return job_response(job)
+
+
+@router.delete("/documents/{document_id}", status_code=204)
+async def remove_document(
+    document_id: UUID,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Response:
+    deleted = await delete_document(
+        session,
+        request.app.state.settings,
+        document_id,
+        vector_indexer=request.app.state.vector_indexer,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return Response(status_code=204)

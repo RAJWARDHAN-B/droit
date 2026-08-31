@@ -92,11 +92,14 @@ The experimental CLI and notebook-export code has been removed. `backend/app/` i
 | API app and config | `backend/app/main.py`, `backend/app/config.py` | ✅ Implemented |
 | Database models | `backend/app/models/` | ✅ Implemented |
 | Document loader | `backend/app/core/ingestion/loader.py` | ✅ TXT, PDF, DOCX, CSV, XLSX |
-| Metadata extractor | `backend/app/core/ingestion/metadata_extractor.py` | ⏳ Pending |
-| Chunker | `backend/app/core/chunking/` | ⏳ Pending |
-| Qdrant indexer | `backend/app/core/embedding/` | ⏳ Pending |
-| Hybrid retriever | `backend/app/core/retrieval/` | ⏳ Pending |
+| Metadata extractor | `backend/app/core/ingestion/metadata_extractor.py` | ✅ File hash, size, type, and text statistics |
+| PII anonymizer | `backend/app/core/pii/` | ✅ Deterministic aliases and encrypted mappings |
+| Chunker | `backend/app/core/chunking/` | ✅ Implemented |
+| Qdrant indexer | `backend/app/core/embedding/` | ✅ Implemented with org/document payloads |
+| Hybrid retriever | `backend/app/core/retrieval/` | 🚧 BM25 + cosine RRF core implemented; query API and cross-encoder pending |
 | Provider-agnostic generator | `backend/app/core/generation/` | ⏳ Pending |
+
+Operational note: Qdrant and FastEmbed dependencies are initialized on first vector use so API liveness does not depend on indexing infrastructure startup.
 
 ---
 
@@ -186,20 +189,23 @@ backend/
 - [x] Store raw file and extracted text on disk and persist the `Document` record
 - [x] Create an idempotent processing job and return its document ID and job ID
 - [x] Expose `GET /api/v1/jobs/{job_id}` for processing status
-- Roll back local files, PostgreSQL records, and Qdrant points when processing fails or a document is deleted
+- [x] Roll back local files, PostgreSQL records, and Qdrant points when processing fails
+- [x] Delete PostgreSQL records, local files, and Qdrant points when a document is deleted
 
 **1.3 — PII Detection & Anonymization** (NEW)
-- Use `presidio-analyzer` + `presidio-anonymizer` for PII detection
-- Detect: names, emails, phone numbers, SSN/Aadhaar, addresses, dates-of-birth, financial identifiers
-- Replace each PII with a deterministic alias: `[PERSON_1]`, `[ORG_2]`, `[EMAIL_1]`
-- Store the mapping: `{alias: original_value, doc_id: ..., entity_type: ...}` in PostgreSQL
-- The anonymized text (with aliases) is what gets chunked → embedded → sent to LLMs
+- [x] Use `presidio-analyzer` with deterministic fallback recognizers for PII detection
+- [x] Replace repeated PII with stable per-document aliases such as `[PERSON_1]` and `[EMAIL_1]`
+- [x] Encrypt original values and store alias mappings in PostgreSQL
+- [x] Chunk and embed anonymized text only
+- [ ] Complete coverage validation for names, organizations, addresses, dates of birth, Aadhaar, and financial identifiers
+- [ ] Add authorized, audited de-anonymization for responses
 
 **1.4 — Hybrid Retrieval (Cosine + BM25)**
-- Add `rank_bm25` to existing retriever
-- Implement Reciprocal Rank Fusion (RRF) to merge cosine and BM25 ranked lists
-- Formula: `RRF(d) = Σᵣ wᵣ / (k + rankᵣ(d))`, with configurable source weights and rank constant `k`
-- Follow with cross-encoder reranking as already built
+- [x] Add `rank_bm25` and organization-scoped lexical candidates
+- [x] Query Qdrant with organization and optional document filters
+- [x] Implement configurable weighted Reciprocal Rank Fusion (RRF)
+- [ ] Add cross-encoder reranking
+- [ ] Expose retrieval through the RAG query endpoint
 
 **1.5 — Provider-Agnostic LLM Generator**
 - Refactor `generator.py` to support: Groq, OpenAI, Anthropic, Ollama
