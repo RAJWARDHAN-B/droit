@@ -38,6 +38,12 @@ class VectorSearcher(Protocol):
     ) -> list[UUID]: ...
 
 
+class ChunkReranker(Protocol):
+    async def rerank(
+        self, query: str, chunks: list[RetrievedChunk]
+    ) -> list[RetrievedChunk]: ...
+
+
 def reciprocal_rank_fusion(
     rankings: list[tuple[float, list[UUID]]],
     *,
@@ -75,15 +81,18 @@ def rank_hybrid_chunks(
     if not candidates:
         return []
 
-    bm25 = BM25Okapi([_tokenize(chunk.text) for chunk in candidates])
+    candidate_tokens = [_tokenize(chunk.text) for chunk in candidates]
+    bm25 = BM25Okapi(candidate_tokens)
     lexical_scores = bm25.get_scores(terms)
+    query_terms = set(terms)
+    # BM25 scores go negative on small corpora, so term overlap decides eligibility.
     bm25_ranking = [
         candidates[index].chunk_id
         for index in sorted(
             range(len(candidates)),
             key=lambda index: (-lexical_scores[index], candidates[index].chunk_index),
         )
-        if lexical_scores[index] > 0
+        if query_terms.intersection(candidate_tokens[index])
     ]
     candidate_ids = {chunk.chunk_id for chunk in candidates}
     filtered_vector_ranking = [
@@ -104,9 +113,15 @@ def rank_hybrid_chunks(
 
 
 class HybridRetriever:
-    def __init__(self, vector_searcher: VectorSearcher, settings: Settings) -> None:
+    def __init__(
+        self,
+        vector_searcher: VectorSearcher,
+        settings: Settings,
+        reranker: ChunkReranker | None = None,
+    ) -> None:
         self._vector_searcher = vector_searcher
         self._settings = settings
+        self._reranker = reranker
 
     async def retrieve(
         self,
@@ -141,26 +156,56 @@ class HybridRetriever:
             document_id=document_id,
             limit=self._settings.retrieval_candidate_limit,
         )
-        return rank_hybrid_chunks(
+        ranked = rank_hybrid_chunks(
             query,
             candidates,
             vector_ranking,
-            limit=limit,
+            limit=max(limit, self._settings.retrieval_reranker_candidate_limit),
             vector_weight=self._settings.retrieval_vector_weight,
             bm25_weight=self._settings.retrieval_bm25_weight,
             rank_constant=self._settings.retrieval_rrf_k,
+        )
+        if self._reranker is not None and ranked:
+            ranked = await self._reranker.rerank(query, ranked)
+        return ranked[:limit]
+
+
+class CrossEncoderReranker:
+    """Lazily score query/chunk pairs with a sentence-transformers model."""
+
+    def __init__(self, model_name: str) -> None:
+        self._model_name = model_name
+        self._model: object | None = None
+
+    async def rerank(
+        self, query: str, chunks: list[RetrievedChunk]
+    ) -> list[RetrievedChunk]:
+        return await asyncio.to_thread(self._rerank_sync, query, chunks)
+
+    def _rerank_sync(
+        self, query: str, chunks: list[RetrievedChunk]
+    ) -> list[RetrievedChunk]:
+        if self._model is None:
+            from sentence_transformers import CrossEncoder
+
+            self._model = CrossEncoder(self._model_name)
+        scores = self._model.predict([(query, chunk.text) for chunk in chunks])  # type: ignore[attr-defined]
+        rescored = [
+            replace(chunk, score=float(score))
+            for chunk, score in zip(chunks, scores, strict=True)
+        ]
+        return sorted(
+            rescored,
+            key=lambda chunk: (-chunk.score, str(chunk.chunk_id)),
         )
 
 
 class QdrantVectorSearcher:
     def __init__(self, settings: Settings) -> None:
+        self._settings = settings
         self._collection = settings.qdrant_collection
-        self._client = QdrantClient(url=settings.qdrant_url)
-        self._embedding = TextEmbedding(
-            model_name=settings.embedding_model,
-            cache_dir=str(settings.storage_root / "models"),
-            lazy_load=True,
-        )
+        self._client: QdrantClient | None = None
+        self._embedding: TextEmbedding | None = None
 
     async def search(
         self,
@@ -185,7 +230,8 @@ class QdrantVectorSearcher:
         document_id: UUID | None,
         limit: int,
     ) -> list[UUID]:
-        vector = next(iter(self._embedding.embed([query]))).tolist()
+        client, embedding = self._dependencies()
+        vector = next(iter(embedding.embed([query]))).tolist()
         conditions = [
             models.FieldCondition(
                 key="organization_id",
@@ -199,7 +245,7 @@ class QdrantVectorSearcher:
                     match=models.MatchValue(value=str(document_id)),
                 )
             )
-        response = self._client.query_points(
+        response = client.query_points(
             collection_name=self._collection,
             query=vector,
             query_filter=models.Filter(must=conditions),
@@ -208,6 +254,17 @@ class QdrantVectorSearcher:
             with_vectors=False,
         )
         return [UUID(str(point.id)) for point in response.points]
+
+    def _dependencies(self) -> tuple[QdrantClient, TextEmbedding]:
+        if self._client is None:
+            self._client = QdrantClient(url=self._settings.qdrant_url)
+        if self._embedding is None:
+            self._embedding = TextEmbedding(
+                model_name=self._settings.embedding_model,
+                cache_dir=str(self._settings.storage_root / "models"),
+                lazy_load=True,
+            )
+        return self._client, self._embedding
 
 
 def _tokenize(text: str) -> list[str]:

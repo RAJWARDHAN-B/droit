@@ -21,6 +21,7 @@ from ..core.ingestion import (
     load_document,
 )
 from ..core.pii import anonymize_text, encrypt_value
+from ..core.risk import score_document_risk
 from ..models import (
     Document,
     DocumentChunk,
@@ -30,7 +31,7 @@ from ..models import (
     ProcessingJob,
     ProcessingStage,
 )
-from ..schemas import ProcessingJobResponse
+from ..schemas import DocumentSummary, ProcessingJobResponse
 
 
 def job_response(job: ProcessingJob) -> ProcessingJobResponse:
@@ -55,6 +56,34 @@ async def get_processing_job(
         .where(ProcessingJob.id == job_id)
     )
     return result.scalar_one_or_none()
+
+
+async def list_documents(
+    session: AsyncSession, settings: Settings
+) -> list[DocumentSummary]:
+    """Return newest-first document summaries owned by the current organization."""
+    result = await session.execute(
+        select(Document)
+        .join(Organization)
+        .options(selectinload(Document.chunks))
+        .where(Organization.slug == settings.default_org_id)
+        .order_by(Document.created_at.desc())
+    )
+    return [
+        DocumentSummary(
+            id=document.id,
+            filename=document.filename,
+            media_type=document.media_type,
+            status=document.status,
+            created_at=document.created_at,
+            chunk_count=len(document.chunks),
+            character_count=document.document_metadata.get("character_count"),
+            pii_count=document.document_metadata.get("pii_count"),
+            risk_score=document.risk_score,
+            risk_breakdown=document.risk_breakdown,
+        )
+        for document in result.scalars().all()
+    ]
 
 
 async def delete_document(
@@ -152,6 +181,12 @@ async def ingest_document(
         anonymized_text, pii_matches = await asyncio.to_thread(
             anonymize_text, extracted_text
         )
+        pii_density = len(pii_matches) / max(len(extracted_text), 1)
+        risk_assessment = await asyncio.to_thread(
+            score_document_risk,
+            anonymized_text,
+            pii_density=pii_density,
+        )
         await asyncio.to_thread(
             _write_atomic, anonymized_text_path, anonymized_text.encode("utf-8")
         )
@@ -168,8 +203,10 @@ async def ingest_document(
             document_metadata={
                 **document_metadata,
                 "pii_count": len(pii_matches),
-                "pii_density": len(pii_matches) / max(len(extracted_text), 1),
+                "pii_density": pii_density,
             },
+            risk_score=risk_assessment.score,
+            risk_breakdown=risk_assessment.breakdown,
         )
         document.pii_mappings.extend(
             PIIMapping(

@@ -24,3 +24,16 @@ class ProcessingJobResponse(BaseModel):
     error_message: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class DocumentSummary(BaseModel):
+    id: UUID
+    filename: str
+    media_type: str | None
+    status: DocumentStatus
+    created_at: datetime
+    chunk_count: int
+    character_count: int | None
+    pii_count: int | None
+    risk_score: float | None
+    risk_breakdown: dict[str, object] | None

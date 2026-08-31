@@ -42,6 +42,7 @@ frontend/.env.local
 
 # Node
 node_modules/
+.npm-cache/
 
 # OS
 .DS_Store

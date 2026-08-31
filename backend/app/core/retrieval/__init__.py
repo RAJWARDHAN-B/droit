@@ -1,6 +1,7 @@
 """Hybrid document retrieval services."""
 
 from .retriever import (
+    CrossEncoderReranker,
     HybridRetriever,
     QdrantVectorSearcher,
     RetrievedChunk,
@@ -8,6 +9,7 @@ from .retriever import (
 )
 
 __all__ = [
+    "CrossEncoderReranker",
     "HybridRetriever",
     "QdrantVectorSearcher",
     "RetrievedChunk",

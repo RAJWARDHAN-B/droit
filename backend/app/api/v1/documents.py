@@ -7,15 +7,24 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_session
-from ...schemas import PasteDocumentRequest, ProcessingJobResponse
+from ...schemas import DocumentSummary, PasteDocumentRequest, ProcessingJobResponse
 from ...services.documents import (
     delete_document,
     get_processing_job,
     ingest_document,
     job_response,
+    list_documents,
 )
 
 router = APIRouter(tags=["documents"])
+
+
+@router.get("/documents", response_model=list[DocumentSummary])
+async def list_all_documents(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[DocumentSummary]:
+    return await list_documents(session, request.app.state.settings)
 
 
 @router.post("/documents/upload", response_model=ProcessingJobResponse, status_code=201)

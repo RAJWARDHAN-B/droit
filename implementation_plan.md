@@ -93,11 +93,11 @@ The experimental CLI and notebook-export code has been removed. `backend/app/` i
 | Database models | `backend/app/models/` | ✅ Implemented |
 | Document loader | `backend/app/core/ingestion/loader.py` | ✅ TXT, PDF, DOCX, CSV, XLSX |
 | Metadata extractor | `backend/app/core/ingestion/metadata_extractor.py` | ✅ File hash, size, type, and text statistics |
-| PII anonymizer | `backend/app/core/pii/` | ✅ Deterministic aliases and encrypted mappings |
+| PII anonymizer | `backend/app/core/pii/` | ✅ NER + pattern recognizers, deterministic aliases, encrypted mappings |
 | Chunker | `backend/app/core/chunking/` | ✅ Implemented |
 | Qdrant indexer | `backend/app/core/embedding/` | ✅ Implemented with org/document payloads |
-| Hybrid retriever | `backend/app/core/retrieval/` | 🚧 BM25 + cosine RRF core implemented; query API and cross-encoder pending |
-| Provider-agnostic generator | `backend/app/core/generation/` | ⏳ Pending |
+| Hybrid retriever | `backend/app/core/retrieval/` | ✅ BM25 + cosine RRF, query API, and cross-encoder reranking |
+| Provider-agnostic generator | `backend/app/core/generation/` | ✅ Groq, OpenAI, Anthropic, and Ollama |
 
 Operational note: Qdrant and FastEmbed dependencies are initialized on first vector use so API liveness does not depend on indexing infrastructure startup.
 
@@ -197,15 +197,17 @@ backend/
 - [x] Replace repeated PII with stable per-document aliases such as `[PERSON_1]` and `[EMAIL_1]`
 - [x] Encrypt original values and store alias mappings in PostgreSQL
 - [x] Chunk and embed anonymized text only
-- [ ] Complete coverage validation for names, organizations, addresses, dates of birth, Aadhaar, and financial identifiers
+- [x] Complete coverage for names, organizations, and locations via spaCy NER, plus emails, phones, SSN, Aadhaar, and financial identifiers via pattern recognizers
+- [x] Preserve dates, money, and legal references verbatim so obligation terms stay answerable
+- [x] Fail fast when the NER model is missing in production instead of silently degrading to regex-only
 - [ ] Add authorized, audited de-anonymization for responses
 
 **1.4 — Hybrid Retrieval (Cosine + BM25)**
 - [x] Add `rank_bm25` and organization-scoped lexical candidates
 - [x] Query Qdrant with organization and optional document filters
 - [x] Implement configurable weighted Reciprocal Rank Fusion (RRF)
-- [ ] Add cross-encoder reranking
-- [ ] Expose retrieval through the RAG query endpoint
+- [x] Add cross-encoder reranking
+- [x] Expose retrieval through the RAG query endpoint
 
 **1.5 — Provider-Agnostic LLM Generator**
 - Refactor `generator.py` to support: Groq, OpenAI, Anthropic, Ollama
@@ -213,9 +215,9 @@ backend/
 - Store the app-level LLM config in DB; only admins can change it
 
 **1.6 — Risk Scorer** (NEW)
-- Analyze document for: missing clauses (indemnification, limitation of liability, termination rights), asymmetric obligations, jurisdiction issues, auto-renewal clauses, PII density
-- Return `risk_score` (0–100) and a `risk_breakdown` dict with per-dimension scores
-- Powered by an LLM call with a structured output (Pydantic model)
+- [x] Analyze document for missing clauses, asymmetric obligations, jurisdiction issues, auto-renewal clauses, and PII density
+- [x] Return and persist `risk_score` (0–100) and an explainable `risk_breakdown`
+- [ ] Enrich the heuristic baseline with an LLM call and structured Pydantic output
 
 **1.7 — Pydantic AI Agents + FastMCP**
 - `IngestionAgent`: Orchestrates upload → extract → PII → chunk → embed → risk score

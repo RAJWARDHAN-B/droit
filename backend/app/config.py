@@ -34,12 +34,22 @@ class Settings(BaseSettings):
     default_org_id: str = "org_default"
     max_upload_bytes: int = 25 * 1024 * 1024
     pii_encryption_key: SecretStr | None = None
+    pii_ner_model: str = "en_core_web_sm"
     chunk_size: int = 800
     chunk_overlap: int = 150
     retrieval_candidate_limit: int = 30
     retrieval_vector_weight: float = 1.0
     retrieval_bm25_weight: float = 1.0
     retrieval_rrf_k: int = 60
+    retrieval_reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    retrieval_reranker_candidate_limit: int = 12
+    llm_provider: str = "groq"
+    llm_model: str = "llama-3.3-70b-versatile"
+    llm_api_key: SecretStr | None = None
+    llm_base_url: str | None = None
+    llm_timeout_seconds: float = 60.0
+    llm_max_tokens: int = 1024
+    cors_origins: list[str] = ["http://localhost:3000"]
 
     @property
     def upload_directory(self) -> Path:

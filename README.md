@@ -11,7 +11,9 @@
 - **Multi-format backend ingestion** — TXT, PDF, DOCX, CSV, and XLSX extraction
 - **FastAPI foundation** — app factory, environment-backed settings, and versioned health API
 - **Privacy-aware processing** — deterministic PII aliases are embedded while encrypted originals remain in PostgreSQL
-- **Hybrid retrieval core** — organization-scoped Qdrant cosine search and BM25 rankings fused with weighted RRF
+- **Hybrid retrieval** — organization-scoped cosine and BM25 rankings fused with weighted RRF, then cross-encoder reranked
+- **Grounded query API** — provider-agnostic answers with citations through Groq, OpenAI, Anthropic, or Ollama
+- **Explainable risk baseline** — missing clauses, asymmetric terms, auto-renewal, jurisdiction, and PII density are scored during ingestion
 
 ---
 
@@ -49,7 +51,7 @@ Document (TXT, PDF, DOCX, CSV, XLSX)
      └── retrieval core: cosine + BM25 → weighted RRF
 ```
 
-The retrieval core is implemented but is not yet exposed through a RAG query endpoint. Cross-encoder reranking and answer generation remain Phase 1 work.
+The retrieval pipeline is exposed through the RAG query endpoint and reranks fused candidates with a cross-encoder before answer generation.
 
 ---
 
@@ -108,6 +110,8 @@ All settings are controlled via `.env` (copy from `.env.example`):
 | `DROIT_RETRIEVAL_VECTOR_WEIGHT` | `1.0` | Vector ranking weight in RRF |
 | `DROIT_RETRIEVAL_BM25_WEIGHT` | `1.0` | BM25 ranking weight in RRF |
 | `DROIT_RETRIEVAL_RRF_K` | `60` | RRF rank constant |
+| `DROIT_RETRIEVAL_RERANKER_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Sentence Transformers cross-encoder model |
+| `DROIT_RETRIEVAL_RERANKER_CANDIDATE_LIMIT` | `12` | Fused candidates scored by the reranker |
 | `DROIT_ENVIRONMENT` | `development` | Runtime environment name |
 | `DROIT_DEBUG` | `false` | FastAPI debug mode |
 
@@ -123,7 +127,9 @@ All settings are controlled via `.env` (copy from `.env.example`):
 - [x] Transactional document deletion across PostgreSQL, Qdrant, and local storage
 - [x] Metadata extraction, deterministic PII anonymization, chunking, and Qdrant indexing
 - [x] BM25 and cosine hybrid retrieval with weighted reciprocal rank fusion
-- [ ] Query API, cross-encoder reranking, provider-agnostic generation, and risk scoring
+- [x] Query API, cross-encoder reranking, and provider-agnostic generation
+- [x] Deterministic clause-heuristic risk scoring and persisted breakdowns
+- [ ] LLM-enriched structured risk scoring
 
 ---
 

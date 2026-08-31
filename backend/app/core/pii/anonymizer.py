@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import importlib.util
+import logging
 import os
+import re
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
+
+from presidio_analyzer import AnalyzerEngine
+
+logger = logging.getLogger(__name__)
 
 from cryptography.fernet import Fernet, InvalidToken
 from presidio_analyzer import RecognizerResult
@@ -27,7 +35,40 @@ _ENTITY_ALIASES = {
     "IN_AADHAAR": "AADHAAR",
     "PHONE_NUMBER": "PHONE",
     "US_SSN": "SSN",
+    "PERSON": "PERSON",
+    "ORGANIZATION": "ORG",
+    "NRP": "NRP",
+    "LOCATION": "LOCATION",
 }
+
+# Generic dates are excluded: notice periods and durations carry legal meaning
+# and are not personally identifying.
+_NER_ENTITIES = ("PERSON", "ORGANIZATION", "NRP", "LOCATION")
+
+# Instrument names such as "Master Services Agreement" identify the document,
+# not a party, so masking them would destroy the document's meaning.
+_LEGAL_INSTRUMENT_NOUNS = frozenset(
+    {
+        "addendum",
+        "agreement",
+        "amendment",
+        "annex",
+        "appendix",
+        "clause",
+        "contract",
+        "covenant",
+        "deed",
+        "exhibit",
+        "indenture",
+        "lease",
+        "license",
+        "memorandum",
+        "policy",
+        "schedule",
+        "terms",
+        "waiver",
+    }
+)
 
 _RECOGNIZERS = (
     EmailRecognizer(),
@@ -37,6 +78,8 @@ _RECOGNIZERS = (
     CreditCardRecognizer(),
     IbanRecognizer(),
 )
+
+_MIN_NER_SCORE = 0.4
 
 
 @dataclass(frozen=True)
@@ -99,7 +142,106 @@ def _analyze(text: str) -> list[RecognizerResult]:
                 nlp_artifacts=None,
             )
         )
+    results.extend(_analyze_named_entities(text))
     return [result for result in results if result.entity_type in _ENTITY_ALIASES]
+
+
+def _analyze_named_entities(text: str) -> list[RecognizerResult]:
+    """Detect names, organizations, and locations when an NER model is installed."""
+    engine = _ner_engine()
+    if engine is None:
+        return []
+    results = engine.analyze(text=text, language="en", entities=list(_NER_ENTITIES))
+    return [
+        result
+        for result in results
+        if result.score >= _MIN_NER_SCORE
+        and not _is_common_word(text[result.start : result.end], text)
+        and not _is_legal_instrument(text[result.start : result.end])
+    ]
+
+
+def _is_legal_instrument(candidate: str) -> bool:
+    words = re.findall(r"[\w']+", candidate.casefold())
+    return bool(words) and words[-1] in _LEGAL_INSTRUMENT_NOUNS
+
+
+def _is_common_word(candidate: str, text: str) -> bool:
+    """Reject proper-noun matches that also appear lowercased in the same document."""
+    normalized = candidate.strip()
+    if not normalized or not normalized[0].isupper():
+        return False
+    return re.search(rf"\b{re.escape(normalized.lower())}\b", text) is not None
+
+
+@lru_cache(maxsize=1)
+def _ner_engine() -> AnalyzerEngine | None:
+    from ...config import get_settings
+
+    settings = get_settings()
+    model_name = settings.pii_ner_model
+    # Presidio downloads absent spaCy models on load, so verify installation
+    # first to avoid a blocking network call at request time.
+    if importlib.util.find_spec(model_name) is None:
+        return _missing_ner_model(model_name, settings)
+    try:
+        from presidio_analyzer.nlp_engine import NlpEngineProvider
+
+        provider = NlpEngineProvider(
+            nlp_configuration={
+                "nlp_engine_name": "spacy",
+                "models": [{"lang_code": "en", "model_name": model_name}],
+                "ner_model_configuration": {
+                    "model_to_presidio_entity_mapping": {
+                        "PER": "PERSON",
+                        "PERSON": "PERSON",
+                        "NORP": "NRP",
+                        "ORG": "ORGANIZATION",
+                        "LOC": "LOCATION",
+                        "GPE": "LOCATION",
+                        "FAC": "LOCATION",
+                    },
+                    # Retained verbatim: these carry legal meaning and are not
+                    # personally identifying.
+                    "labels_to_ignore": [
+                        "O",
+                        "DATE",
+                        "TIME",
+                        "MONEY",
+                        "PERCENT",
+                        "CARDINAL",
+                        "ORDINAL",
+                        "QUANTITY",
+                        "LAW",
+                        "PRODUCT",
+                        "EVENT",
+                        "WORK_OF_ART",
+                        "LANGUAGE",
+                    ],
+                },
+            }
+        )
+        return AnalyzerEngine(
+            nlp_engine=provider.create_engine(), supported_languages=["en"]
+        )
+    except Exception:
+        return _missing_ner_model(model_name, settings)
+
+
+def _missing_ner_model(model_name: str, settings: Settings) -> None:
+    if settings.environment.lower() == "production":
+        raise RuntimeError(
+            f"spaCy model '{model_name}' is required to anonymize names and "
+            "organizations. Install it with: uv pip install -r "
+            "backend/requirements.txt"
+        )
+    logger.warning(
+        "spaCy model '%s' unavailable; names and organizations will NOT be "
+        "anonymized and may be sent to LLM providers. Install it with: "
+        "uv pip install -r backend/requirements.txt",
+        model_name,
+    )
+    return None
 
 
 def _non_overlapping_results(
