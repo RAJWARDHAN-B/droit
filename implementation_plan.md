@@ -177,15 +177,15 @@ backend/
 
 **1.1 — Project Restructure**
 - Keep all Python application code under `backend/app/`; do not recreate a parallel root package
-- Set up FastAPI with lifespan events (DB init, model loading)
-- Set up PostgreSQL + Alembic migrations
+- [x] Set up FastAPI with lifespan events and async database sessions
+- [x] Set up PostgreSQL + Alembic migrations
 
 **1.2 — Document Ingestion API** (`POST /api/v1/documents/upload`)
-- Accept: PDF, DOCX, TXT, CSV, XLSX, paste (raw text via JSON body)
-- Add Excel/CSV loaders (extract text from tabular data with context headers)
-- Store raw file on disk, extract text, persist `Document` record to DB
-- Create an idempotent processing job and return its document ID and job ID
-- Expose `GET /api/v1/jobs/{job_id}` for Uploading → Extracting → PII Scan → Indexing → Done/Failed status
+- [x] Accept PDF, DOCX, TXT, CSV, XLSX, and pasted text
+- [x] Add Excel/CSV loaders with row and header context
+- [x] Store raw file and extracted text on disk and persist the `Document` record
+- [x] Create an idempotent processing job and return its document ID and job ID
+- [x] Expose `GET /api/v1/jobs/{job_id}` for processing status
 - Roll back local files, PostgreSQL records, and Qdrant points when processing fails or a document is deleted
 
 **1.3 — PII Detection & Anonymization** (NEW)

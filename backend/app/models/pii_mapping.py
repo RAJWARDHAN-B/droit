@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import ForeignKey, LargeBinary, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -17,7 +18,7 @@ class PIIMapping(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "pii_mappings"
     __table_args__ = (UniqueConstraint("document_id", "alias"),)
 
-    document_id: Mapped[str] = mapped_column(
+    document_id: Mapped[UUID] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     alias: Mapped[str] = mapped_column(String(100))

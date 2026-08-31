@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     storage_root: Path = PROJECT_ROOT / "storage"
     default_org_id: str = "org_default"
+    max_upload_bytes: int = 25 * 1024 * 1024
 
     @property
     def upload_directory(self) -> Path:

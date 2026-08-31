@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, String
@@ -34,7 +35,7 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    organization_id: Mapped[str] = mapped_column(
+    organization_id: Mapped[UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)

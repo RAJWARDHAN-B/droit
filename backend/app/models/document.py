@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
@@ -27,7 +28,7 @@ class DocumentStatus(str, Enum):
 class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "documents"
 
-    organization_id: Mapped[str] = mapped_column(
+    organization_id: Mapped[UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
     filename: Mapped[str] = mapped_column(String(255))
@@ -60,7 +61,7 @@ class DocumentChunk(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "document_chunks"
     __table_args__ = (UniqueConstraint("document_id", "chunk_index"),)
 
-    document_id: Mapped[str] = mapped_column(
+    document_id: Mapped[UUID] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     chunk_index: Mapped[int] = mapped_column(Integer)

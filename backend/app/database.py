@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -34,3 +35,9 @@ async def session_scope(
         except Exception:
             await session.rollback()
             raise
+
+
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    """Provide one transaction-scoped session for an HTTP request."""
+    async for session in session_scope(request.app.state.session_factory):
+        yield session

@@ -99,8 +99,8 @@ All settings are controlled via `.env` (copy from `.env.example`):
 - [x] FastAPI app factory, settings, and liveness endpoint
 - [x] Backend TXT, PDF, DOCX, CSV, and XLSX loader
 - [x] PostgreSQL models for organizations, users, documents, chunks, PII mappings, and jobs
-- [ ] Alembic initial migration
-- [ ] Upload processing jobs and status API
+- [x] Alembic initial migration and schema drift checks
+- [x] Multipart upload, pasted-text ingestion, idempotency, and job status API
 - [ ] PII anonymization and Qdrant indexing
 
 ---
