@@ -1,8 +1,14 @@
 # Environment — NEVER commit secrets
 .env
 
-# ChromaDB persisted index
+# ChromaDB persisted index (legacy)
 chroma_db/
+
+# Qdrant local data (managed by Docker volume, but in case of local runs)
+qdrant_data/
+
+# Local document storage
+storage/
 
 # Python
 __pycache__/
@@ -19,12 +25,31 @@ build/
 venv/
 .venv/
 env/
+backend/.venv/
+backend/venv/
 
 # IDEs
 .vscode/
 .idea/
 *.swp
+*.swo
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.env.local
+
+# Node
+node_modules/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Alembic — keep versions but ignore compiled
+backend/alembic/versions/__pycache__/
+
+# Logs
+*.log
+logs/
