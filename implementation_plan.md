@@ -22,14 +22,14 @@ Droit is being evolved from a CLI-based legal RAG pipeline into a **full-stack, 
 ### Frontend
 | Tool | Version | Why |
 |---|---|---|
-| **Next.js** | 15 (App Router) | Latest stable, RSC, streaming, great DX |
+| **Next.js** | 16.x (App Router) | Current project version, RSC, streaming, great DX |
 | **TypeScript** | 5.x | Type safety across the board |
-| **Tailwind CSS** | 3.x | Natural fit for Next.js, fast iteration |
+| **Tailwind CSS** | 4.x | Current project version, natural fit for Next.js |
 | **shadcn/ui** | latest | Accessible, unstyled-by-default components on Radix UI |
-| **Zustand** | 4.x | Lightweight client state (auth, settings) |
+| **Zustand** | 5.x | Lightweight client state (auth, settings) |
 | **TanStack Query** | 5.x | Server state, caching, invalidation |
-| **Framer Motion** | 11.x | Smooth animations and micro-interactions |
-| **NextAuth.js** | v5 | Auth — free, self-hosted, credentials + JWT |
+| **Framer Motion** | 13.x | Smooth animations and micro-interactions |
+| **NextAuth.js** | v5 beta | Current project version; free, self-hosted credentials + JWT |
 
 > [!NOTE]
 > **Why NextAuth over Clerk?** Clerk is great but has a paid tier. NextAuth v5 is free, runs locally, and is more than enough for single-org. We can migrate to Clerk if multi-tenancy is needed later.
@@ -48,11 +48,11 @@ Droit is being evolved from a CLI-based legal RAG pipeline into a **full-stack, 
 | Tool | Why |
 |---|---|
 | **PostgreSQL** | Relational data: docs, PII maps, users, audit logs |
-| **Qdrant** (replaces ChromaDB) | ⭐ Recommended: Rust-core, local Docker, much better production performance than ChromaDB. ChromaDB's SQLite backend has known bottlenecks under load. Qdrant runs as a local Docker container and the API is similar. |
+| **Qdrant** | Persistent local vector storage with filtering and payload indexing |
 | **Redis** | Phase 4+: query caching, session context store. Not needed in Phase 1. |
 
 > [!IMPORTANT]
-> **ChromaDB → Qdrant**: Your existing ChromaDB code is easily migrated — same vector search API surface. Qdrant is strictly better for production: persistent storage, filtering, payload indexing, and no SQLite lock issues. We'll run it locally via Docker.
+> **Vector store**: Qdrant is the only supported vector store and runs locally through Docker Compose.
 
 ### LLM Providers (provider-agnostic via Pydantic AI)
 - **Groq** (default, fast, free tier)
@@ -77,25 +77,26 @@ storage/
 
 ---
 
-## Remaining Open Question
+## Ollama / Local LLM Scope
 
-> [!IMPORTANT]
-> **Ollama / Local LLM scope**: Should the Ollama/local LLM endpoint be a **per-user** setting or a **global app-level** setting (one endpoint for the whole single-org)? Recommendation: **app-level setting** (simpler for single-org, set once by the admin in Settings).
+The Ollama endpoint is a **global app-level setting** managed by an admin. Provider credentials are encrypted at rest. Per-user endpoint and provider overrides are deferred until role or multi-tenancy requirements justify them.
 
 ---
 
-## Existing Code Inventory (What We Keep)
+## Backend Module Inventory
 
-| Module | File | Status |
-|--------|------|--------|
-| Document loader | `droit/ingestion/loader.py` | ✅ Keep, extend with Excel/CSV |
-| Metadata extractor | `droit/ingestion/metadata_extractor.py` | ✅ Keep, extend |
-| Chunker | `droit/chunking/splitter.py` | ✅ Keep |
-| Embedder/Indexer | `droit/embedding/indexer.py` | ✅ Keep |
-| Retriever + Reranker | `droit/retrieval/retriever.py` | ✅ Keep, add BM25 hybrid |
-| Generator | `droit/generation/generator.py` | ✅ Keep, make provider-agnostic |
-| Config | `droit/config.py` | ✅ Extend with new settings |
-| `main.py` | CLI entrypoint | 🔄 Keep for dev, superseded by FastAPI |
+The experimental CLI and notebook-export code has been removed. `backend/app/` is the sole Python application package, avoiding duplicate configuration and pipeline implementations.
+
+| Module | Backend location | Status |
+|--------|------------------|--------|
+| API app and config | `backend/app/main.py`, `backend/app/config.py` | ✅ Implemented |
+| Database models | `backend/app/models/` | ✅ Implemented |
+| Document loader | `backend/app/core/ingestion/loader.py` | ✅ TXT, PDF, DOCX, CSV, XLSX |
+| Metadata extractor | `backend/app/core/ingestion/metadata_extractor.py` | ⏳ Pending |
+| Chunker | `backend/app/core/chunking/` | ⏳ Pending |
+| Qdrant indexer | `backend/app/core/embedding/` | ⏳ Pending |
+| Hybrid retriever | `backend/app/core/retrieval/` | ⏳ Pending |
+| Provider-agnostic generator | `backend/app/core/generation/` | ⏳ Pending |
 
 ---
 
@@ -133,7 +134,7 @@ Beyond what you listed, here are features worth adding across phases:
 backend/
 ├── app/
 │   ├── main.py               # FastAPI app factory
-│   ├── config.py             # Pydantic Settings (replaces droit/config.py)
+│   ├── config.py             # Pydantic Settings
 │   ├── database.py           # SQLAlchemy engine + session
 │   ├── models/               # SQLAlchemy ORM models
 │   │   ├── document.py       # Document, DocumentChunk
@@ -146,7 +147,7 @@ backend/
 │   │   │   ├── documents.py  # Upload, list, delete endpoints
 │   │   │   ├── query.py      # RAG query endpoint
 │   │   │   └── settings.py   # LLM provider settings
-│   ├── core/                 # Business logic (migrated from droit/)
+│   ├── core/                 # Business logic
 │   │   ├── ingestion/        # loader.py, metadata_extractor.py (extended)
 │   │   ├── pii/              # pii_detector.py, pii_anonymizer.py
 │   │   ├── chunking/         # splitter.py
@@ -175,7 +176,7 @@ backend/
 #### Key Phase 1 Tasks:
 
 **1.1 — Project Restructure**
-- Move existing `droit/` modules into `backend/app/core/`
+- Keep all Python application code under `backend/app/`; do not recreate a parallel root package
 - Set up FastAPI with lifespan events (DB init, model loading)
 - Set up PostgreSQL + Alembic migrations
 
@@ -183,7 +184,9 @@ backend/
 - Accept: PDF, DOCX, TXT, CSV, XLSX, paste (raw text via JSON body)
 - Add Excel/CSV loaders (extract text from tabular data with context headers)
 - Store raw file on disk, extract text, persist `Document` record to DB
-- Return document ID for subsequent operations
+- Create an idempotent processing job and return its document ID and job ID
+- Expose `GET /api/v1/jobs/{job_id}` for Uploading → Extracting → PII Scan → Indexing → Done/Failed status
+- Roll back local files, PostgreSQL records, and Qdrant points when processing fails or a document is deleted
 
 **1.3 — PII Detection & Anonymization** (NEW)
 - Use `presidio-analyzer` + `presidio-anonymizer` for PII detection
@@ -195,13 +198,13 @@ backend/
 **1.4 — Hybrid Retrieval (Cosine + BM25)**
 - Add `rank_bm25` to existing retriever
 - Implement Reciprocal Rank Fusion (RRF) to merge cosine and BM25 ranked lists
-- Formula: `score = α * cosine_rank_score + β * bm25_rank_score` where α+β=1 (configurable)
+- Formula: `RRF(d) = Σᵣ wᵣ / (k + rankᵣ(d))`, with configurable source weights and rank constant `k`
 - Follow with cross-encoder reranking as already built
 
 **1.5 — Provider-Agnostic LLM Generator**
 - Refactor `generator.py` to support: Groq, OpenAI, Anthropic, Ollama
 - Accept `provider`, `model`, `api_key`, `base_url` (for Ollama) at runtime
-- Store org-level LLM config in DB; user can override via UI settings
+- Store the app-level LLM config in DB; only admins can change it
 
 **1.6 — Risk Scorer** (NEW)
 - Analyze document for: missing clauses (indemnification, limitation of liability, termination rights), asymmetric obligations, jurisdiction issues, auto-renewal clauses, PII density
@@ -215,6 +218,7 @@ backend/
 - `SummarizationAgent`: Produces legal-jargon or layman summaries
 - `OrchestratorAgent`: Routes user queries to the right agent(s)
 - FastMCP server exposes all agent capabilities as MCP tools (for future integrations)
+- De-anonymization is an explicit authorized operation; external LLM calls and default responses use aliases, and every reveal is audited
 
 **1.8 — Context Enrichment Store**
 - `POST /api/v1/session/page-visit` — store last 5 page visits per session
@@ -305,7 +309,7 @@ frontend/
 - Test connection button
 
 **2.7 — Legal Doc Drafting Shell**
-- Placeholder page with coming-soon state
+- Placeholder page for the future Phase 5 module
 - Text area for prompt input (disabled or non-functional)
 - Template picker UI (NDA, MSA, Employment Agreement)
 - "Generate Draft" button (disabled, shows tooltip: "Coming in next release")
@@ -434,7 +438,7 @@ frontend/
        ┌───────┴────────┐
        │                │
 ┌──────▼──────┐  ┌──────▼──────────┐
-│ PostgreSQL  │  │   ChromaDB      │
+│ PostgreSQL  │  │    Qdrant       │
 │  Documents  │  │  Vector Store   │
 │  PII Maps   │  │  (per org)      │
 │  Org/User   │  └─────────────────┘
