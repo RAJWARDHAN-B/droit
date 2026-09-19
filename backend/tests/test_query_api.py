@@ -48,7 +48,7 @@ class StubGenerator:
     ) -> GeneratedAnswer:
         self.calls.append(chunks)
         return GeneratedAnswer(
-            answer="Either party may terminate with thirty days notice [1].",
+            answer="Email [EMAIL_1] if either party terminates [1].",
             provider="stub",
             model="stub-model",
         )
@@ -84,7 +84,7 @@ def test_query_answers_from_indexed_document_with_citations(tmp_path: Path) -> N
                 "/api/v1/documents/paste",
                 json={
                     "title": "Services Agreement",
-                    "text": "Either party may terminate this agreement with thirty days written notice.",
+                    "text": "Contact jane@example.com. Either party may terminate this agreement with thirty days written notice.",
                 },
             )
             response = client.post(
@@ -94,11 +94,12 @@ def test_query_answers_from_indexed_document_with_citations(tmp_path: Path) -> N
 
         body = response.json()
         assert response.status_code == 200
-        assert body["answer"].startswith("Either party may terminate")
+        assert body["answer"] == "Email jane@example.com if either party terminates [1]."
         assert body["provider"] == "stub"
         assert len(body["citations"]) == 1
         assert body["citations"][0]["filename"] == "Services Agreement.txt"
         assert "terminate" in body["citations"][0]["excerpt"]
+        assert "jane@example.com" in body["citations"][0]["excerpt"]
         assert generator.calls, "The generator should receive retrieved context"
     finally:
         asyncio.run(_delete_test_organization(settings))

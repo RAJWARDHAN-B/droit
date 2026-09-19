@@ -1,6 +1,18 @@
 """Tests for explainable document risk scoring."""
 
-from backend.app.core.risk import score_document_risk
+import pytest
+
+from backend.app.core.risk import LLMRiskEnricher, score_document_risk
+from backend.app.core.generation import GeneratedAnswer
+
+
+class StubGenerator:
+    async def generate(self, question, chunks):
+        return GeneratedAnswer(
+            answer='{"score_delta": 12, "findings": ["Missing audit rights"], "confidence": 0.8}',
+            provider="stub",
+            model="stub",
+        )
 
 
 def test_balanced_contract_has_lower_risk_than_unilateral_auto_renewal() -> None:
@@ -30,3 +42,16 @@ def test_pii_density_is_capped_and_cannot_reduce_score() -> None:
 
     assert assessment.breakdown["pii_score"] == 10
     assert assessment.score == 65
+
+
+@pytest.mark.asyncio
+async def test_llm_enrichment_adds_validated_findings_to_baseline() -> None:
+    baseline = score_document_risk("The governing law is Delaware.")
+
+    enriched = await LLMRiskEnricher(StubGenerator()).enrich(
+        "The governing law is Delaware.", baseline
+    )
+
+    assert enriched.score == baseline.score + 12
+    assert enriched.breakdown["llm_findings"] == ["Missing audit rights"]
+    assert enriched.breakdown["llm_confidence"] == 0.8

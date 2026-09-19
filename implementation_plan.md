@@ -4,6 +4,21 @@
 
 Droit is being evolved from a CLI-based legal RAG pipeline into a **full-stack, production-grade Legal Intelligence Platform**. The existing Python pipeline (ingestion → chunking → embedding → retrieval → generation) becomes the backbone of a multi-agent backend, exposed via FastAPI + FastMCP, and consumed by a sleek Next.js frontend.
 
+## Current Status (2026-09-17)
+
+### Done
+
+- Phase 1 backend foundation, ingestion, encrypted PII mappings, anonymized indexing, hybrid retrieval, cited answers, job status, deletion rollback, and heuristic risk scoring are implemented and tested.
+- Optional structured LLM risk enrichment with heuristic fallback is implemented.
+- The current frontend supports pasted text, multi-file upload queues, processing-stage polling, document search and risk filters, deletion, anonymized document viewing, scoped queries, citations, and risk findings.
+
+### Remaining
+
+- Add authorization and audit logging around response de-anonymization.
+- Add persistent admin-managed LLM settings and connection testing.
+- Build the Pydantic AI agent layer, FastMCP tools, and session context API.
+- Complete the multi-route frontend, authentication, summary views, marketing/content pages, and later-phase comparison, audit, export, and drafting features.
+
 ---
 
 ## Confirmed Decisions
@@ -98,6 +113,7 @@ The experimental CLI and notebook-export code has been removed. `backend/app/` i
 | Qdrant indexer | `backend/app/core/embedding/` | ✅ Implemented with org/document payloads |
 | Hybrid retriever | `backend/app/core/retrieval/` | ✅ BM25 + cosine RRF, query API, and cross-encoder reranking |
 | Provider-agnostic generator | `backend/app/core/generation/` | ✅ Groq, OpenAI, Anthropic, and Ollama |
+| Risk scorer and enrichment | `backend/app/core/risk/` | ✅ Heuristic baseline, persisted breakdown, optional structured LLM enrichment |
 
 Operational note: Qdrant and FastEmbed dependencies are initialized on first vector use so API liveness does not depend on indexing infrastructure startup.
 
@@ -200,6 +216,7 @@ backend/
 - [x] Complete coverage for names, organizations, and locations via spaCy NER, plus emails, phones, SSN, Aadhaar, and financial identifiers via pattern recognizers
 - [x] Preserve dates, money, and legal references verbatim so obligation terms stay answerable
 - [x] Fail fast when the NER model is missing in production instead of silently degrading to regex-only
+- [x] Add response de-anonymization from encrypted mappings
 - [ ] Add authorized, audited de-anonymization for responses
 
 **1.4 — Hybrid Retrieval (Cosine + BM25)**
@@ -210,33 +227,33 @@ backend/
 - [x] Expose retrieval through the RAG query endpoint
 
 **1.5 — Provider-Agnostic LLM Generator**
-- Refactor `generator.py` to support: Groq, OpenAI, Anthropic, Ollama
-- Accept `provider`, `model`, `api_key`, `base_url` (for Ollama) at runtime
-- Store the app-level LLM config in DB; only admins can change it
+- [x] Refactor `generator.py` to support: Groq, OpenAI, Anthropic, Ollama
+- [x] Accept `provider`, `model`, `api_key`, `base_url` (for Ollama) at runtime
+- [ ] Store the app-level LLM config in DB; only admins can change it
 
 **1.6 — Risk Scorer** (NEW)
 - [x] Analyze document for missing clauses, asymmetric obligations, jurisdiction issues, auto-renewal clauses, and PII density
 - [x] Return and persist `risk_score` (0–100) and an explainable `risk_breakdown`
-- [ ] Enrich the heuristic baseline with an LLM call and structured Pydantic output
+- [x] Enrich the heuristic baseline with an optional LLM call and structured Pydantic output
 
 **1.7 — Pydantic AI Agents + FastMCP**
-- `IngestionAgent`: Orchestrates upload → extract → PII → chunk → embed → risk score
-- `PIIAgent`: Handles PII detection, anonymization, and de-anonymization for responses
-- `RetrievalAgent`: Runs hybrid search + reranking
-- `SummarizationAgent`: Produces legal-jargon or layman summaries
-- `OrchestratorAgent`: Routes user queries to the right agent(s)
-- FastMCP server exposes all agent capabilities as MCP tools (for future integrations)
-- De-anonymization is an explicit authorized operation; external LLM calls and default responses use aliases, and every reveal is audited
+- [ ] `IngestionAgent`: Orchestrates upload → extract → PII → chunk → embed → risk score
+- [ ] `PIIAgent`: Handles PII detection, anonymization, and de-anonymization for responses
+- [ ] `RetrievalAgent`: Runs hybrid search + reranking
+- [ ] `SummarizationAgent`: Produces legal-jargon or layman summaries
+- [ ] `OrchestratorAgent`: Routes user queries to the right agent(s)
+- [ ] FastMCP server exposes all agent capabilities as MCP tools (for future integrations)
+- [ ] De-anonymization is an explicit authorized operation; external LLM calls and default responses use aliases, and every reveal is audited
 
 **1.8 — Context Enrichment Store**
-- `POST /api/v1/session/page-visit` — store last 5 page visits per session
-- `GET /api/v1/session/context` — returns current enrichment context
-- Query endpoint reads session context and prepends it to the system prompt
+- [ ] `POST /api/v1/session/page-visit` — store last 5 page visits per session
+- [ ] `GET /api/v1/session/context` — returns current enrichment context
+- [ ] Query endpoint reads session context and prepends it to the system prompt
 
 ---
 
 ## Phase 2 — Next.js Frontend (Core UI)
-**Goal**: Build the main application UI: document upload, RAG query interface, document library.
+**Goal**: Build the main application UI: document upload, RAG query interface, document library, and document viewer. The initial single-page workspace is implemented; route separation and remaining workflows are still pending.
 
 **Duration estimate**: 3–4 weeks
 
@@ -281,46 +298,47 @@ frontend/
 #### Key Phase 2 Tasks:
 
 **2.1 — Design System**
-- Dark mode-first, minimalist aesthetic
-- Color palette: deep navy/slate base, gold/amber accents (legal brand)
-- Typography: Inter (UI), Playfair Display (headings)
-- Glass morphism cards, subtle gradients, smooth transitions
+- [x] Dark mode-first, minimalist aesthetic
+- [x] Color palette: deep navy/slate base, gold/amber accents (legal brand)
+- [ ] Typography: Inter (UI), Playfair Display (headings)
+- [x] Glass morphism cards, subtle gradients, smooth transitions
 
 **2.2 — Document Upload UI**
-- Drag-and-drop zone supporting: PDF, DOCX, TXT, CSV, XLSX
-- "Paste Text" tab — textarea for direct text input
-- Real-time processing status: Uploading → Extracting → PII Scan → Indexing → Done
-- Multi-file upload queue
+- [x] Drag-and-drop zone supporting: PDF, DOCX, TXT, CSV, XLSX
+- [x] "Paste Text" tab — textarea for direct text input
+- [x] Processing status polling: Uploading → Extracting → PII Scan → Indexing → Done
+- [x] Multi-file upload queue
 
 **2.3 — Document Library (Dashboard)**
-- Grid/list view of all uploaded documents
-- Risk score badge (color-coded: green/yellow/orange/red)
-- Filters: doc type, date, risk level
-- Bulk actions: delete, re-index
+- [x] List view of all uploaded documents
+- [x] Risk score badge with explainable findings
+- [ ] Grid view and filters for document type and date
+- [ ] Bulk actions: delete, re-index
 
 **2.4 — Document Viewer + In-context Chat**
-- Split-pane: document viewer (left) + chat panel (right)
-- Scope toggle in chat: "This Document" vs. "All Documents"
-- Citation chips in responses — clicking scrolls to the relevant chunk in viewer
-- Summary panel: legal summary tab + layman summary tab
+- [x] Split workspace: document viewer + chat panel
+- [x] Scope control for one document vs. all documents
+- [x] Citation entries select the relevant source document
+- [ ] Scroll to the cited chunk in the viewer
+- [ ] Summary panel: legal summary tab + layman summary tab
 
 **2.5 — Floating Chatbot (Info Pages)**
-- Floating icon (bottom-right) on all marketing/info pages
-- Clicks open a mini chat window (not full page)
-- Scope toggle in mini window
-- Context enrichment: reads current page URL + last 5 visits → informs system prompt
+- [ ] Floating icon (bottom-right) on all marketing/info pages
+- [ ] Clicks open a mini chat window (not full page)
+- [ ] Scope toggle in mini window
+- [ ] Context enrichment: reads current page URL + last 5 visits → informs system prompt
 
 **2.6 — Settings Page**
-- LLM Provider selector: Groq / OpenAI / Anthropic / Ollama
-- For Ollama: custom base URL field (e.g., `http://localhost:11434`)
-- API key input with show/hide toggle
-- Test connection button
+- [ ] LLM Provider selector: Groq / OpenAI / Anthropic / Ollama
+- [ ] For Ollama: custom base URL field (e.g., `http://localhost:11434`)
+- [ ] API key input with show/hide toggle
+- [ ] Test connection button
 
 **2.7 — Legal Doc Drafting Shell**
-- Placeholder page for the future Phase 5 module
-- Text area for prompt input (disabled or non-functional)
-- Template picker UI (NDA, MSA, Employment Agreement)
-- "Generate Draft" button (disabled, shows tooltip: "Coming in next release")
+- [ ] Placeholder page for the future Phase 5 module
+- [ ] Text area for prompt input (disabled or non-functional)
+- [ ] Template picker UI (NDA, MSA, Employment Agreement)
+- [ ] "Generate Draft" button (disabled, shows tooltip: "Coming in next release")
 
 ---
 

@@ -7,11 +7,17 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_session
-from ...schemas import DocumentSummary, PasteDocumentRequest, ProcessingJobResponse
+from ...schemas import (
+    DocumentContent,
+    DocumentSummary,
+    PasteDocumentRequest,
+    ProcessingJobResponse,
+)
 from ...services.documents import (
     delete_document,
     get_processing_job,
     ingest_document,
+    get_document_content,
     job_response,
     list_documents,
 )
@@ -45,6 +51,7 @@ async def upload_document(
             content=content,
             idempotency_key=idempotency_key,
             vector_indexer=request.app.state.vector_indexer,
+            risk_enricher=request.app.state.risk_enricher,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -74,6 +81,7 @@ async def paste_document(
             content=payload.text.encode("utf-8"),
             idempotency_key=idempotency_key,
             vector_indexer=request.app.state.vector_indexer,
+            risk_enricher=request.app.state.risk_enricher,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -81,6 +89,20 @@ async def paste_document(
     if not created:
         response.status_code = 200
     return job_response(job)
+
+
+@router.get("/documents/{document_id}/content", response_model=DocumentContent)
+async def document_content(
+    document_id: UUID,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> DocumentContent:
+    content = await get_document_content(
+        session, request.app.state.settings, document_id
+    )
+    if content is None:
+        raise HTTPException(status_code=404, detail="Document content not found")
+    return content
 
 
 @router.get("/jobs/{job_id}", response_model=ProcessingJobResponse)

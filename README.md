@@ -129,7 +129,7 @@ All settings are controlled via `.env` (copy from `.env.example`):
 - [x] BM25 and cosine hybrid retrieval with weighted reciprocal rank fusion
 - [x] Query API, cross-encoder reranking, and provider-agnostic generation
 - [x] Deterministic clause-heuristic risk scoring and persisted breakdowns
-- [ ] LLM-enriched structured risk scoring
+- [x] Optional LLM-enriched structured risk scoring with heuristic fallback
 
 ---
 

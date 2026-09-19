@@ -6,11 +6,13 @@ import { askQuestion, type DocumentSummary, type QueryAnswer } from "@/lib/api";
 
 type Props = {
   documents: DocumentSummary[];
+  selectedDocumentId: string | null;
+  onSelectDocument: (documentId: string) => void;
 };
 
-export function QueryPanel({ documents }: Props) {
+export function QueryPanel({ documents, selectedDocumentId, onSelectDocument }: Props) {
   const [question, setQuestion] = useState("");
-  const [scope, setScope] = useState<string>("all");
+  const [scope, setScope] = useState<string>(selectedDocumentId ?? "all");
   const [answer, setAnswer] = useState<QueryAnswer | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,9 +87,16 @@ export function QueryPanel({ documents }: Props) {
                     key={citation.chunk_id}
                     className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2"
                   >
-                    <p className="text-xs font-medium text-amber-400">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScope(citation.document_id);
+                        onSelectDocument(citation.document_id);
+                      }}
+                      className="text-left text-xs font-medium text-amber-400 hover:text-amber-300"
+                    >
                       [{index + 1}] {citation.filename}
-                    </p>
+                    </button>
                     <p className="mt-1 text-xs text-slate-400">
                       {citation.excerpt}
                     </p>

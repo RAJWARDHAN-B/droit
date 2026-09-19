@@ -13,6 +13,14 @@ export type DocumentSummary = {
   character_count: number | null;
   pii_count: number | null;
   risk_score: number | null;
+  risk_breakdown: Record<string, unknown> | null;
+};
+
+export type DocumentContent = {
+  id: string;
+  filename: string;
+  text: string;
+  anonymized: boolean;
 };
 
 export type ProcessingJob = {
@@ -21,6 +29,7 @@ export type ProcessingJob = {
   filename: string;
   document_status: DocumentStatus;
   stage: string;
+  error_message: string | null;
 };
 
 export type Citation = {
@@ -75,6 +84,10 @@ export function uploadDocument(file: File): Promise<ProcessingJob> {
   return request<ProcessingJob>("/documents/upload", { method: "POST", body });
 }
 
+export function getProcessingJob(jobId: string): Promise<ProcessingJob> {
+  return request<ProcessingJob>(`/jobs/${jobId}`);
+}
+
 export function pasteDocument(
   title: string,
   text: string,
@@ -88,6 +101,10 @@ export function pasteDocument(
 
 export function deleteDocument(documentId: string): Promise<void> {
   return request<void>(`/documents/${documentId}`, { method: "DELETE" });
+}
+
+export function getDocumentContent(documentId: string): Promise<DocumentContent> {
+  return request<DocumentContent>(`/documents/${documentId}/content`);
 }
 
 export function askQuestion(

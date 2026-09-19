@@ -6,7 +6,12 @@ import pytest
 
 from backend.app import config
 from backend.app.config import Settings, get_settings
-from backend.app.core.pii import anonymize_text, decrypt_value, encrypt_value
+from backend.app.core.pii import (
+    anonymize_text,
+    decrypt_value,
+    encrypt_value,
+    restore_text,
+)
 from backend.app.core.pii import anonymizer
 
 requires_ner_model = pytest.mark.skipif(
@@ -45,6 +50,13 @@ def test_encrypted_value_round_trip_uses_local_development_key(tmp_path) -> None
     assert encrypted != b"jane@example.com"
     assert decrypt_value(encrypted, settings) == "jane@example.com"
     assert (tmp_path / ".pii.key").stat().st_mode & 0o777 == 0o600
+
+
+def test_restore_text_replaces_aliases_without_partial_matches() -> None:
+    assert restore_text(
+        "Contact [EMAIL_1] about [EMAIL_10].",
+        {"[EMAIL_1]": "one@example.com", "[EMAIL_10]": "ten@example.com"},
+    ) == "Contact one@example.com about ten@example.com."
 
 
 def test_production_requires_explicit_encryption_key(tmp_path) -> None:

@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings
 from ..core.generation import AnswerGenerator
+from ..core.pii import decrypt_value, restore_text
 from ..core.retrieval import HybridRetriever, RetrievedChunk
-from ..models import Document, Organization
+from ..models import Document, Organization, PIIMapping
 
 NO_CONTEXT_ANSWER = (
     "No indexed content is available to answer this question. "
@@ -61,15 +62,62 @@ async def answer_question(
         )
 
     generated = await generator.generate(question, chunks)
+    replacements_by_document = await _pii_replacements(
+        session, settings, {chunk.document_id for chunk in chunks}
+    )
+    replacements = _unambiguous_replacements(replacements_by_document)
     return QueryResult(
-        answer=generated.answer,
+        answer=restore_text(generated.answer, replacements),
         provider=generated.provider,
         model=generated.model,
-        chunks=chunks,
+        chunks=[
+            RetrievedChunk(
+                chunk_id=chunk.chunk_id,
+                document_id=chunk.document_id,
+                chunk_index=chunk.chunk_index,
+                text=restore_text(
+                    chunk.text, replacements_by_document.get(chunk.document_id, {})
+                ),
+                score=chunk.score,
+            )
+            for chunk in chunks
+        ],
         filenames=await _filenames(
             session, {chunk.document_id for chunk in chunks}
         ),
     )
+
+
+async def _pii_replacements(
+    session: AsyncSession, settings: Settings, document_ids: set[UUID]
+) -> dict[UUID, dict[str, str]]:
+    result = await session.execute(
+        select(
+            PIIMapping.document_id,
+            PIIMapping.alias,
+            PIIMapping.original_value_encrypted,
+        ).where(PIIMapping.document_id.in_(document_ids))
+    )
+    replacements_by_document = {document_id: {} for document_id in document_ids}
+    for document_id, alias, encrypted_value in result.all():
+        replacements_by_document[document_id][alias] = decrypt_value(
+            encrypted_value, settings
+        )
+    return replacements_by_document
+
+
+def _unambiguous_replacements(
+    replacements_by_document: dict[UUID, dict[str, str]],
+) -> dict[str, str]:
+    candidates: dict[str, set[str]] = {}
+    for document_replacements in replacements_by_document.values():
+        for alias, value in document_replacements.items():
+            candidates.setdefault(alias, set()).add(value)
+    return {
+        alias: next(iter(values))
+        for alias, values in candidates.items()
+        if len(values) == 1
+    }
 
 
 async def _organization_id(session: AsyncSession, slug: str) -> UUID | None:

@@ -15,6 +15,7 @@ from .core.retrieval import (
     HybridRetriever,
     QdrantVectorSearcher,
 )
+from .core.risk import LLMRiskEnricher
 from .database import create_engine, create_session_factory
 
 
@@ -40,6 +41,7 @@ def create_app(
             reranker=CrossEncoderReranker(app_settings.retrieval_reranker_model),
         )
         app.state.generator = generator or LLMGenerator(app_settings)
+        app.state.risk_enricher = LLMRiskEnricher(app.state.generator)
         try:
             yield
         finally:

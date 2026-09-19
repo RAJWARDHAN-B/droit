@@ -37,3 +37,10 @@ class DocumentSummary(BaseModel):
     pii_count: int | None
     risk_score: float | None
     risk_breakdown: dict[str, object] | None
+
+
+class DocumentContent(BaseModel):
+    id: UUID
+    filename: str
+    text: str
+    anonymized: bool = True

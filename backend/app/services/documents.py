@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import os
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -21,7 +22,7 @@ from ..core.ingestion import (
     load_document,
 )
 from ..core.pii import anonymize_text, encrypt_value
-from ..core.risk import score_document_risk
+from ..core.risk import RiskEnricher, score_document_risk
 from ..models import (
     Document,
     DocumentChunk,
@@ -31,7 +32,9 @@ from ..models import (
     ProcessingJob,
     ProcessingStage,
 )
-from ..schemas import DocumentSummary, ProcessingJobResponse
+from ..schemas import DocumentContent, DocumentSummary, ProcessingJobResponse
+
+logger = logging.getLogger(__name__)
 
 
 def job_response(job: ProcessingJob) -> ProcessingJobResponse:
@@ -84,6 +87,27 @@ async def list_documents(
         )
         for document in result.scalars().all()
     ]
+
+
+async def get_document_content(
+    session: AsyncSession, settings: Settings, document_id: UUID
+) -> DocumentContent | None:
+    """Return organization-scoped anonymized text for the document viewer."""
+    result = await session.execute(
+        select(Document)
+        .join(Organization)
+        .where(
+            Document.id == document_id,
+            Organization.slug == settings.default_org_id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if document is None or document.anonymized_text_path is None:
+        return None
+    text = await asyncio.to_thread(
+        Path(document.anonymized_text_path).read_text, encoding="utf-8"
+    )
+    return DocumentContent(id=document.id, filename=document.filename, text=text)
 
 
 async def delete_document(
@@ -140,6 +164,7 @@ async def ingest_document(
     content: bytes,
     idempotency_key: str | None,
     vector_indexer: VectorIndexer,
+    risk_enricher: RiskEnricher | None = None,
 ) -> tuple[ProcessingJob, bool]:
     """Persist and extract a document, returning its durable processing job."""
     safe_filename = _safe_filename(filename)
@@ -187,6 +212,16 @@ async def ingest_document(
             anonymized_text,
             pii_density=pii_density,
         )
+        if risk_enricher is not None and settings.llm_api_key is not None:
+            try:
+                risk_assessment = await risk_enricher.enrich(
+                    anonymized_text, risk_assessment
+                )
+            except Exception:
+                logger.warning(
+                    "LLM risk enrichment failed; retaining heuristic assessment",
+                    exc_info=True,
+                )
         await asyncio.to_thread(
             _write_atomic, anonymized_text_path, anonymized_text.encode("utf-8")
         )

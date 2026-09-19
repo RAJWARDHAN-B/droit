@@ -121,6 +121,15 @@ def anonymize_text(text: str) -> tuple[str, list[PIIMatch]]:
     return "".join(pieces), mappings
 
 
+def restore_text(text: str, replacements: dict[str, str]) -> str:
+    """Replace complete anonymization aliases with their original values."""
+    if not replacements:
+        return text
+    aliases = sorted(replacements, key=len, reverse=True)
+    pattern = re.compile("|".join(re.escape(alias) for alias in aliases))
+    return pattern.sub(lambda match: replacements[match.group(0)], text)
+
+
 def encrypt_value(value: str, settings: Settings) -> bytes:
     return _cipher(settings).encrypt(value.encode("utf-8"))
 
