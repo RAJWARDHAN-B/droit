@@ -7,6 +7,8 @@ from .document import (
     ProcessingJobResponse,
 )
 from .query import Citation, QueryRequest, QueryResponse
+from .auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from .settings import LLMSettingsRequest, LLMSettingsResponse
 
 __all__ = [
     "Citation",
@@ -16,4 +18,10 @@ __all__ = [
     "ProcessingJobResponse",
     "QueryRequest",
     "QueryResponse",
+    "LoginRequest",
+    "RegisterRequest",
+    "TokenResponse",
+    "UserResponse",
+    "LLMSettingsRequest",
+    "LLMSettingsResponse",
 ]

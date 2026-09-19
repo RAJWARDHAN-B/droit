@@ -2,9 +2,15 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import logging
+from time import perf_counter
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from .api.v1.router import api_router
 from .config import Settings, get_settings
@@ -17,6 +23,30 @@ from .core.retrieval import (
 )
 from .core.risk import LLMRiskEnricher
 from .database import create_engine, create_session_factory
+
+logger = logging.getLogger("droit.api")
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        request_id = request.headers.get("X-Request-ID", str(uuid4()))
+        started = perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception("request_failed request_id=%s path=%s", request_id, request.url.path)
+            raise
+        duration_ms = (perf_counter() - started) * 1000
+        response.headers["X-Request-ID"] = request_id
+        logger.info(
+            "request_complete request_id=%s method=%s path=%s status=%s duration_ms=%.1f",
+            request_id,
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+        return response
 
 
 def create_app(
@@ -61,6 +91,7 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestLoggingMiddleware)
     app.include_router(api_router, prefix=app_settings.api_v1_prefix)
     return app
 

@@ -94,15 +94,27 @@ def test_query_answers_from_indexed_document_with_citations(tmp_path: Path) -> N
 
         body = response.json()
         assert response.status_code == 200
-        assert body["answer"] == "Email jane@example.com if either party terminates [1]."
+        assert body["answer"] == "Email [EMAIL_1] if either party terminates [1]."
         assert body["provider"] == "stub"
         assert len(body["citations"]) == 1
         assert body["citations"][0]["filename"] == "Services Agreement.txt"
         assert "terminate" in body["citations"][0]["excerpt"]
-        assert "jane@example.com" in body["citations"][0]["excerpt"]
+        assert "[EMAIL_1]" in body["citations"][0]["excerpt"]
         assert generator.calls, "The generator should receive retrieved context"
     finally:
         asyncio.run(_delete_test_organization(settings))
+
+
+def test_query_reveal_requires_an_authenticated_role(tmp_path: Path) -> None:
+    settings = Settings(storage_root=tmp_path, default_org_id=f"test-{uuid4().hex}")
+
+    with TestClient(_build_app(settings, StubGenerator())) as client:
+        response = client.post(
+            "/api/v1/query",
+            json={"question": "Who should I contact?", "reveal_pii": True},
+        )
+
+    assert response.status_code == 403
 
 
 def test_query_without_indexed_documents_skips_the_model(tmp_path: Path) -> None:

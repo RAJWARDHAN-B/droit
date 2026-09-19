@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_session
+from ...core.auth import current_user
+from ...models import User
 from ...schemas import (
     DocumentContent,
     DocumentSummary,
@@ -29,6 +31,7 @@ router = APIRouter(tags=["documents"])
 async def list_all_documents(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[User | None, Depends(current_user)],
 ) -> list[DocumentSummary]:
     return await list_documents(session, request.app.state.settings)
 
@@ -40,6 +43,7 @@ async def upload_document(
     file: UploadFile,
     session: Annotated[AsyncSession, Depends(get_session)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    _: Annotated[User | None, Depends(current_user)] = None,
 ) -> ProcessingJobResponse:
     try:
         content = await file.read(request.app.state.settings.max_upload_bytes + 1)
@@ -70,6 +74,7 @@ async def paste_document(
     response: Response,
     session: Annotated[AsyncSession, Depends(get_session)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    _: Annotated[User | None, Depends(current_user)] = None,
 ) -> ProcessingJobResponse:
     filename = payload.title if payload.title.lower().endswith(".txt") else f"{payload.title}.txt"
     try:
@@ -96,6 +101,7 @@ async def document_content(
     document_id: UUID,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[User | None, Depends(current_user)],
 ) -> DocumentContent:
     content = await get_document_content(
         session, request.app.state.settings, document_id
@@ -109,6 +115,7 @@ async def document_content(
 async def processing_job(
     job_id: UUID,
     session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[User | None, Depends(current_user)],
 ) -> ProcessingJobResponse:
     job = await get_processing_job(session, job_id)
     if job is None:
@@ -121,6 +128,7 @@ async def remove_document(
     document_id: UUID,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[User | None, Depends(current_user)],
 ) -> Response:
     deleted = await delete_document(
         session,

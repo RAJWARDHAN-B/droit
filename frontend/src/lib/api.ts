@@ -64,7 +64,12 @@ async function readError(response: Response): Promise<string> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, init);
+  const headers = new Headers(init?.headers);
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("droit_access_token") : null;
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, { ...init, headers });
   if (!response.ok) {
     throw new Error(await readError(response));
   }
@@ -72,6 +77,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+export async function login(email: string, password: string): Promise<void> {
+  const result = await request<{ access_token: string }>("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  window.localStorage.setItem("droit_access_token", result.access_token);
 }
 
 export function listDocuments(): Promise<DocumentSummary[]> {

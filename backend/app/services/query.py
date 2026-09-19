@@ -12,7 +12,8 @@ from ..config import Settings
 from ..core.generation import AnswerGenerator
 from ..core.pii import decrypt_value, restore_text
 from ..core.retrieval import HybridRetriever, RetrievedChunk
-from ..models import Document, Organization, PIIMapping
+from ..models import Document, Organization, PIIMapping, User, UserRole
+from .audit import record_audit
 
 NO_CONTEXT_ANSWER = (
     "No indexed content is available to answer this question. "
@@ -38,6 +39,9 @@ async def answer_question(
     limit: int,
     retriever: HybridRetriever,
     generator: AnswerGenerator,
+    reveal_pii: bool = False,
+    user: User | None = None,
+    request=None,
 ) -> QueryResult:
     """Answer a question from anonymized context owned by the current organization."""
     if not question.strip():
@@ -62,10 +66,24 @@ async def answer_question(
         )
 
     generated = await generator.generate(question, chunks)
-    replacements_by_document = await _pii_replacements(
-        session, settings, {chunk.document_id for chunk in chunks}
+    replacements_by_document = (
+        await _pii_replacements(session, settings, {chunk.document_id for chunk in chunks})
+        if reveal_pii
+        else {}
     )
     replacements = _unambiguous_replacements(replacements_by_document)
+    if reveal_pii:
+        if user is None or user.role not in (UserRole.ADMIN, UserRole.ANALYST):
+            raise PermissionError("Only analysts and admins may reveal PII")
+        if request is not None:
+            await record_audit(
+                session,
+                request,
+                user=user,
+                action="pii.response_revealed",
+                resource_type="query",
+                details={"document_count": len({chunk.document_id for chunk in chunks})},
+            )
     return QueryResult(
         answer=restore_text(generated.answer, replacements),
         provider=generated.provider,

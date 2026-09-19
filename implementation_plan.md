@@ -6,6 +6,10 @@ Droit is being evolved from a CLI-based legal RAG pipeline into a **full-stack, 
 
 ## Current Status (2026-09-17)
 
+### Active milestone (2026-09-19)
+
+The active priority is to secure and stabilize the existing workflow before adding distributed infrastructure or additional product modules. Authentication, role checks, audited PII reveal, persisted encrypted LLM settings, focused end-to-end tests, route separation, and operational error handling are the current release gate.
+
 ### Done
 
 - Phase 1 backend foundation, ingestion, encrypted PII mappings, anonymized indexing, hybrid retrieval, cited answers, job status, deletion rollback, and heuristic risk scoring are implemented and tested.
@@ -14,10 +18,10 @@ Droit is being evolved from a CLI-based legal RAG pipeline into a **full-stack, 
 
 ### Remaining
 
-- Add authorization and audit logging around response de-anonymization.
-- Add persistent admin-managed LLM settings and connection testing.
-- Build the Pydantic AI agent layer, FastMCP tools, and session context API.
-- Complete the multi-route frontend, authentication, summary views, marketing/content pages, and later-phase comparison, audit, export, and drafting features.
+- Complete dedicated authentication, settings, and audit tests.
+- Connect the frontend login and protected route session to the backend JWT API.
+- Add runtime error reporting and dependency diagnostics.
+- Defer agents, MCP, Redis, workers, streaming, and content modules until a concrete consumer or measured bottleneck justifies them.
 
 ---
 
@@ -217,7 +221,7 @@ backend/
 - [x] Preserve dates, money, and legal references verbatim so obligation terms stay answerable
 - [x] Fail fast when the NER model is missing in production instead of silently degrading to regex-only
 - [x] Add response de-anonymization from encrypted mappings
-- [ ] Add authorized, audited de-anonymization for responses
+- [x] Add authorized, audited de-anonymization for responses
 
 **1.4 — Hybrid Retrieval (Cosine + BM25)**
 - [x] Add `rank_bm25` and organization-scoped lexical candidates
@@ -229,23 +233,23 @@ backend/
 **1.5 — Provider-Agnostic LLM Generator**
 - [x] Refactor `generator.py` to support: Groq, OpenAI, Anthropic, Ollama
 - [x] Accept `provider`, `model`, `api_key`, `base_url` (for Ollama) at runtime
-- [ ] Store the app-level LLM config in DB; only admins can change it
+- [x] Store the app-level LLM config in DB; only admins can change it
 
 **1.6 — Risk Scorer** (NEW)
 - [x] Analyze document for missing clauses, asymmetric obligations, jurisdiction issues, auto-renewal clauses, and PII density
 - [x] Return and persist `risk_score` (0–100) and an explainable `risk_breakdown`
 - [x] Enrich the heuristic baseline with an optional LLM call and structured Pydantic output
 
-**1.7 — Pydantic AI Agents + FastMCP**
-- [ ] `IngestionAgent`: Orchestrates upload → extract → PII → chunk → embed → risk score
+**1.7 — Pydantic AI Agents + FastMCP (deferred)**
+- [ ] `IngestionAgent`: Orchestrates upload → extract → PII → chunk → embed → risk score (deferred)
 - [ ] `PIIAgent`: Handles PII detection, anonymization, and de-anonymization for responses
 - [ ] `RetrievalAgent`: Runs hybrid search + reranking
 - [ ] `SummarizationAgent`: Produces legal-jargon or layman summaries
 - [ ] `OrchestratorAgent`: Routes user queries to the right agent(s)
-- [ ] FastMCP server exposes all agent capabilities as MCP tools (for future integrations)
+- [ ] FastMCP server exposes all agent capabilities as MCP tools (for future integrations; deferred)
 - [ ] De-anonymization is an explicit authorized operation; external LLM calls and default responses use aliases, and every reveal is audited
 
-**1.8 — Context Enrichment Store**
+**1.8 — Context Enrichment Store (deferred)**
 - [ ] `POST /api/v1/session/page-visit` — store last 5 page visits per session
 - [ ] `GET /api/v1/session/context` — returns current enrichment context
 - [ ] Query endpoint reads session context and prepends it to the system prompt
@@ -253,7 +257,7 @@ backend/
 ---
 
 ## Phase 2 — Next.js Frontend (Core UI)
-**Goal**: Build the main application UI: document upload, RAG query interface, document library, and document viewer. The initial single-page workspace is implemented; route separation and remaining workflows are still pending.
+**Goal**: Build the main application UI: document upload, RAG query interface, document library, and document viewer. The initial workflow and route shells are implemented; authentication wiring and focused UI validation remain.
 
 **Duration estimate**: 3–4 weeks
 

@@ -9,6 +9,7 @@ class QueryRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
     document_id: UUID | None = None
     limit: int = Field(default=8, ge=1, le=20)
+    reveal_pii: bool = False
 
 
 class Citation(BaseModel):

@@ -5,8 +5,10 @@ from backend.app.models import Base
 
 def test_phase_one_tables_are_registered() -> None:
     assert set(Base.metadata.tables) == {
+        "audit_logs",
         "document_chunks",
         "documents",
+        "llm_settings",
         "organizations",
         "pii_mappings",
         "processing_jobs",

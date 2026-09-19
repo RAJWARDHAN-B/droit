@@ -1,0 +1,1 @@
+Use the repository and nearest directory `AGENTS.md` files as the source of coding conventions. Keep changes focused, preserve organization scoping, and validate executable behavior after edits. Treat PII, provider credentials, JWT secrets, and encryption keys as sensitive. Do not introduce agents, MCP, Redis, or workers without a concrete requirement.

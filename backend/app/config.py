@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
     llm_max_tokens: int = 1024
     cors_origins: list[str] = ["http://localhost:3000"]
+    auth_required: bool = False
+    jwt_secret: SecretStr = SecretStr("change-this-development-secret")
+    jwt_expire_minutes: int = 60
 
     @property
     def upload_directory(self) -> Path:

@@ -93,6 +93,14 @@ Qdrant and the embedding model are initialized lazily on the first vector operat
 .venv/bin/python -m pytest backend/tests -q
 ```
 
+### Authentication and security
+
+The first `POST /api/v1/auth/register` call creates the initial organization admin. Use `POST /api/v1/auth/login` to obtain a bearer token. Set `DROIT_AUTH_REQUIRED=true` and a strong `DROIT_JWT_SECRET` outside local development.
+
+Queries return anonymized aliases by default. Setting `reveal_pii=true` requires an analyst or admin token and creates an audit record. Admin-only LLM settings are available at `/api/v1/settings/llm`; API keys are encrypted before storage.
+
+Read [SECURITY.md](SECURITY.md), [PLAN.md](PLAN.md), and the applicable [AGENTS.md](AGENTS.md) before changing sensitive workflows.
+
 ## Configuration
 
 All settings are controlled via `.env` (copy from `.env.example`):
