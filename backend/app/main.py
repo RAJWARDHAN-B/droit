@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.responses import JSONResponse
 
 from .api.v1.router import api_router
 from .config import Settings, get_settings
@@ -30,6 +31,7 @@ logger = logging.getLogger("droit.api")
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid4()))
+        request.state.request_id = request_id
         started = perf_counter()
         try:
             response = await call_next(request)
@@ -83,7 +85,24 @@ def create_app(
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception(request: Request, _exc: Exception) -> JSONResponse:
+        request_id = getattr(request.state, "request_id", "unknown")
+        logger.exception("unhandled_exception request_id=%s path=%s", request_id, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "code": "internal_error",
+                    "message": "An unexpected server error occurred",
+                    "request_id": request_id,
+                }
+            },
+            headers={"X-Request-ID": request_id},
+        )
     app.state.settings = app_settings
+    app.state.health_client = None
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,

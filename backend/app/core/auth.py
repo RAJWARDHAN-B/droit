@@ -1,28 +1,46 @@
 """JWT authentication and role dependencies."""
 
 from datetime import datetime, timedelta, timezone
+import base64
+import hashlib
+import hmac
+import os
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_session
 from ..models import User, UserRole
 
 _bearer = HTTPBearer(auto_error=False)
-_passwords = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 def hash_password(password: str) -> str:
-    return _passwords.hash(password)
+    salt = os.urandom(16)
+    digest = hashlib.scrypt(
+        password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=64
+    )
+    return "scrypt$1$%s$%s" % (
+        base64.urlsafe_b64encode(salt).decode("ascii"),
+        base64.urlsafe_b64encode(digest).decode("ascii"),
+    )
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return _passwords.verify(password, password_hash)
+    try:
+        scheme, version, encoded_salt, encoded_digest = password_hash.split("$", 3)
+        if scheme != "scrypt" or version != "1":
+            return False
+        salt = base64.urlsafe_b64decode(encoded_salt.encode("ascii"))
+        expected = base64.urlsafe_b64decode(encoded_digest.encode("ascii"))
+        actual = hashlib.scrypt(
+            password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=64
+        )
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False
 
 
 def create_access_token(user: User, request: Request) -> str:

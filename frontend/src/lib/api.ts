@@ -78,6 +78,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, { ...init, headers });
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.localStorage.removeItem("droit_access_token");
+      window.dispatchEvent(new Event("droit:auth-expired"));
+    }
     throw new Error(await readError(response));
   }
   if (response.status === 204) {

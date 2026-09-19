@@ -31,8 +31,24 @@ def test_readiness_checks_database(tmp_path) -> None:
 
     app.dependency_overrides[get_session] = override_session
 
+    class HealthyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    class HealthyClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, _url):
+            return HealthyResponse()
+
+    app.state.health_client = HealthyClient()
+
     with TestClient(app) as client:
         response = client.get("/api/v1/health/ready")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "database": "ok"}
+    assert response.json() == {"status": "ready", "database": "ok", "qdrant": "ok"}

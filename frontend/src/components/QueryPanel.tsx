@@ -8,9 +8,10 @@ type Props = {
   documents: DocumentSummary[];
   selectedDocumentId: string | null;
   onSelectDocument: (documentId: string) => void;
+  onSelectCitation?: (citation: QueryAnswer["citations"][number]) => void;
 };
 
-export function QueryPanel({ documents, selectedDocumentId, onSelectDocument }: Props) {
+export function QueryPanel({ documents, selectedDocumentId, onSelectDocument, onSelectCitation }: Props) {
   const [question, setQuestion] = useState("");
   const [scope, setScope] = useState<string>(selectedDocumentId ?? "all");
   const [answer, setAnswer] = useState<QueryAnswer | null>(null);
@@ -92,6 +93,7 @@ export function QueryPanel({ documents, selectedDocumentId, onSelectDocument }: 
                       onClick={() => {
                         setScope(citation.document_id);
                         onSelectDocument(citation.document_id);
+                        onSelectCitation?.(citation);
                       }}
                       className="text-left text-xs font-medium text-amber-400 hover:text-amber-300"
                     >

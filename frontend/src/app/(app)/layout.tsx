@@ -13,6 +13,11 @@ export default function AppLayout({ children }: Readonly<{ children: React.React
     } else {
       router.replace("/login");
     }
+    function handleExpired() {
+      router.replace("/login");
+    }
+    window.addEventListener("droit:auth-expired", handleExpired);
+    return () => window.removeEventListener("droit:auth-expired", handleExpired);
   }, [router]);
 
   function logout() {

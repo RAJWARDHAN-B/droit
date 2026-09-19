@@ -19,8 +19,8 @@ The active priority is to secure and stabilize the existing workflow before addi
 ### Remaining
 
 - Add dedicated authentication, settings, and audit assertions beyond the current workflow coverage.
-- Complete the document detail workflow and connect citation selection to the viewer.
-- Add dedicated auth, role, settings, and audit assertions beyond the current workflow coverage.
+- Replace browser-only JWT storage with a server-side or httpOnly-cookie session before production deployment.
+- Begin product work only after deciding whether the deferred agent/MCP scope has a concrete consumer.
 - Add dependency diagnostics to readiness and structured error reporting.
 - Defer agents, MCP, Redis, workers, streaming, and content modules until a concrete consumer or measured bottleneck justifies them.
 
