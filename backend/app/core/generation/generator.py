@@ -95,6 +95,26 @@ class LLMGenerator:
             model=self._settings.llm_model,
         )
 
+    async def test_connection(self) -> None:
+        """Make a minimal provider request without exposing response content."""
+        provider = self._settings.llm_provider.strip().lower()
+        if provider not in _DEFAULT_BASE_URLS:
+            raise ValueError(f"Unsupported LLM provider '{provider}'")
+        api_key = (
+            self._settings.llm_api_key.get_secret_value().strip()
+            if self._settings.llm_api_key is not None
+            else ""
+        )
+        if provider not in _KEYLESS_PROVIDERS and not api_key:
+            raise ValueError(f"An API key is required for the '{provider}' provider")
+        base_url = (self._settings.llm_base_url or _DEFAULT_BASE_URLS[provider]).rstrip("/")
+        if provider == "anthropic":
+            url, headers, payload = self._anthropic_request(base_url, api_key, "Reply with OK.")
+        else:
+            url, headers, payload = self._openai_request(base_url, api_key, "Reply with OK.")
+        payload["max_tokens"] = 1
+        await self._post(url, headers, payload)
+
     def _openai_request(
         self, base_url: str, api_key: str, prompt: str
     ) -> tuple[str, dict[str, str], dict[str, Any]]:

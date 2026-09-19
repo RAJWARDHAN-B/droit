@@ -48,6 +48,13 @@ export type QueryAnswer = {
   citations: Citation[];
 };
 
+export type LLMSettings = {
+  provider: string;
+  model: string;
+  base_url: string | null;
+  api_key_configured: boolean;
+};
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = await response.json();
@@ -86,6 +93,36 @@ export async function login(email: string, password: string): Promise<void> {
     body: JSON.stringify({ email, password }),
   });
   window.localStorage.setItem("droit_access_token", result.access_token);
+}
+
+export function getLLMSettings(): Promise<LLMSettings> {
+  return request<LLMSettings>("/settings/llm");
+}
+
+export function updateLLMSettings(payload: {
+  provider: string;
+  model: string;
+  base_url: string | null;
+  api_key: string | null;
+}): Promise<LLMSettings> {
+  return request<LLMSettings>("/settings/llm", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testLLMSettings(payload: {
+  provider: string;
+  model: string;
+  base_url: string | null;
+  api_key: string | null;
+}): Promise<{ success: boolean; message: string }> {
+  return request<{ success: boolean; message: string }>("/settings/llm/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listDocuments(): Promise<DocumentSummary[]> {

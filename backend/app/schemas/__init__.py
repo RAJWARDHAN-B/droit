@@ -8,7 +8,7 @@ from .document import (
 )
 from .query import Citation, QueryRequest, QueryResponse
 from .auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
-from .settings import LLMSettingsRequest, LLMSettingsResponse
+from .settings import ConnectionTestResponse, LLMSettingsRequest, LLMSettingsResponse
 
 __all__ = [
     "Citation",
@@ -24,4 +24,5 @@ __all__ = [
     "UserResponse",
     "LLMSettingsRequest",
     "LLMSettingsResponse",
+    "ConnectionTestResponse",
 ]

@@ -2,15 +2,17 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.auth import AdminUser
+from ...core.generation import LLMGenerator
 from ...core.pii import encrypt_value
 from ...database import get_session
 from ...models import LLMSetting, Organization
-from ...schemas import LLMSettingsRequest, LLMSettingsResponse
+from ...schemas import ConnectionTestResponse, LLMSettingsRequest, LLMSettingsResponse
 from ...services.audit import record_audit
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -74,3 +76,33 @@ async def update_llm_settings(
         base_url=setting.base_url,
         api_key_configured=setting.api_key_encrypted is not None,
     )
+
+
+@router.post("/llm/test", response_model=ConnectionTestResponse)
+async def test_llm_settings(
+    payload: LLMSettingsRequest,
+    request: Request,
+    user: AdminUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ConnectionTestResponse:
+    from ...services.settings import effective_settings
+
+    configured = await effective_settings(session, request.app.state.settings)
+    test_settings = configured.model_copy(
+        update={
+            "llm_provider": payload.provider.lower(),
+            "llm_model": payload.model,
+            "llm_base_url": payload.base_url,
+        }
+    )
+    if payload.api_key:
+        from pydantic import SecretStr
+
+        test_settings.llm_api_key = SecretStr(payload.api_key)
+    try:
+        await LLMGenerator(test_settings).test_connection()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="The language model provider is unavailable") from exc
+    return ConnectionTestResponse(success=True, message="Connection successful")

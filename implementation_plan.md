@@ -18,9 +18,10 @@ The active priority is to secure and stabilize the existing workflow before addi
 
 ### Remaining
 
-- Complete dedicated authentication, settings, and audit tests.
-- Connect the frontend login and protected route session to the backend JWT API.
-- Add runtime error reporting and dependency diagnostics.
+- Add dedicated authentication, settings, and audit assertions beyond the current workflow coverage.
+- Complete the document detail workflow and connect citation selection to the viewer.
+- Add dedicated auth, role, settings, and audit assertions beyond the current workflow coverage.
+- Add dependency diagnostics to readiness and structured error reporting.
 - Defer agents, MCP, Redis, workers, streaming, and content modules until a concrete consumer or measured bottleneck justifies them.
 
 ---
@@ -333,10 +334,12 @@ frontend/
 - [ ] Context enrichment: reads current page URL + last 5 visits → informs system prompt
 
 **2.6 — Settings Page**
-- [ ] LLM Provider selector: Groq / OpenAI / Anthropic / Ollama
-- [ ] For Ollama: custom base URL field (e.g., `http://localhost:11434`)
-- [ ] API key input with show/hide toggle
-- [ ] Test connection button
+- [x] LLM Provider selector: Groq / OpenAI / Anthropic / Ollama
+- [x] For Ollama: custom base URL field (e.g., `http://localhost:11434`)
+- [x] API key input with show/hide toggle
+- [x] Test connection button
+
+The protected backend settings API and frontend settings workflow are implemented.
 
 **2.7 — Legal Doc Drafting Shell**
 - [ ] Placeholder page for the future Phase 5 module

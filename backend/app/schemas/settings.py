@@ -15,3 +15,8 @@ class LLMSettingsResponse(BaseModel):
     model: str
     base_url: str | None
     api_key_configured: bool
+
+
+class ConnectionTestResponse(BaseModel):
+    success: bool
+    message: str
