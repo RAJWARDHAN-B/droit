@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     retrieval_rrf_k: int = 60
     retrieval_reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     retrieval_reranker_candidate_limit: int = 12
+    risk_weight_missing_clause: float = 8.0
+    risk_weight_asymmetric_term: float = 5.0
+    risk_weight_auto_renewal: float = 15.0
+    risk_weight_jurisdiction: float = 15.0
+    risk_weight_pii_density: float = 10.0
+    risk_max_asymmetry_score: float = 20.0
     llm_provider: str = "groq"
     llm_model: str = "llama-3.3-70b-versatile"
     llm_api_key: SecretStr | None = None
@@ -62,6 +68,20 @@ class Settings(BaseSettings):
     def upload_directory(self) -> Path:
         """Return the local upload directory for the single organization."""
         return self.storage_root / "uploads" / self.default_org_id
+
+    @property
+    def risk_weights(self) -> "RiskWeights":
+        """Return the configured scoring weights for document risk findings."""
+        from .core.risk import RiskWeights
+
+        return RiskWeights(
+            missing_clause=self.risk_weight_missing_clause,
+            asymmetric_term=self.risk_weight_asymmetric_term,
+            auto_renewal=self.risk_weight_auto_renewal,
+            jurisdiction=self.risk_weight_jurisdiction,
+            pii_density=self.risk_weight_pii_density,
+            max_asymmetry=self.risk_max_asymmetry_score,
+        )
 
 
 @lru_cache

@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..models import DocumentStatus, ProcessingStage
+from ..core.generation import SummaryStyle
 
 
 class PasteDocumentRequest(BaseModel):
@@ -44,3 +45,18 @@ class DocumentContent(BaseModel):
     filename: str
     text: str
     anonymized: bool = True
+
+
+class DocumentSummaryRequest(BaseModel):
+    style: SummaryStyle = SummaryStyle.LEGAL
+    refresh: bool = False
+
+
+class DocumentSummaryText(BaseModel):
+    document_id: UUID
+    style: SummaryStyle
+    summary: str
+    provider: str
+    model: str
+    generated_at: datetime
+    cached: bool

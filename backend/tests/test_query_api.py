@@ -150,7 +150,7 @@ def test_documents_library_lists_uploaded_documents(tmp_path: Path) -> None:
         assert body[0]["filename"] == "NDA.txt"
         assert body[0]["status"] == "ready"
         assert body[0]["chunk_count"] == 1
-        assert body[0]["risk_score"] == 55
+        assert body[0]["risk_score"] == 87
         assert "limitation_of_liability" in body[0]["risk_breakdown"]["missing_clauses"]
     finally:
         asyncio.run(_delete_test_organization(settings))

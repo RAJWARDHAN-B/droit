@@ -49,11 +49,25 @@ class LLMRiskEnricher:
             ],
         )
         enrichment = _parse_enrichment(generated.answer)
+        findings = list(baseline.breakdown.get("findings", []))
+        findings.extend(
+            {
+                "category": "llm_review",
+                "label": finding,
+                "severity": "medium",
+                "score": 0.0,
+                "start": None,
+                "end": None,
+            }
+            for finding in enrichment.findings
+        )
         breakdown = {
             **baseline.breakdown,
+            "findings": findings,
             "llm_score_delta": enrichment.score_delta,
             "llm_findings": enrichment.findings,
             "llm_confidence": enrichment.confidence,
+            "llm_status": "applied",
         }
         return RiskAssessment(
             score=round(min(100, max(0, baseline.score + enrichment.score_delta)), 2),

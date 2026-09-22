@@ -44,6 +44,8 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     document_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     risk_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     risk_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Cached generated summaries keyed by style, e.g. {"legal": {"text": ..., "model": ...}}.
+    summaries: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     organization: Mapped[Organization] = relationship(back_populates="documents")
     chunks: Mapped[list[DocumentChunk]] = relationship(

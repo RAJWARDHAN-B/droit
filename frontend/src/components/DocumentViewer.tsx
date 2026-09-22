@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-import { getDocumentContent, type DocumentContent } from "@/lib/api";
+import {
+  getDocumentContent,
+  getDocumentSummary,
+  type DocumentContent,
+  type DocumentSummaryText,
+  type SummaryStyle,
+} from "@/lib/api";
 
 type Props = {
   documentId: string | null;
@@ -12,6 +18,10 @@ type Props = {
 export function DocumentViewer({ documentId, highlightedExcerpt = null }: Props) {
   const [content, setContent] = useState<DocumentContent | null>(null);
   const [error, setError] = useState<{ documentId: string; message: string } | null>(null);
+  const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("legal");
+  const [summary, setSummary] = useState<DocumentSummaryText | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!documentId) {
@@ -38,6 +48,20 @@ export function DocumentViewer({ documentId, highlightedExcerpt = null }: Props)
     };
   }, [documentId]);
 
+  async function loadSummary(style: SummaryStyle) {
+    if (!documentId) return;
+    setSummaryStyle(style);
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      setSummary(await getDocumentSummary(documentId, style));
+    } catch (cause) {
+      setSummaryError(cause instanceof Error ? cause.message : "Unable to generate summary");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
   const visibleContent = content?.id === documentId ? content : null;
   const visibleError = error?.documentId === documentId ? error.message : null;
   const loading = Boolean(documentId && !visibleContent && !visibleError);
@@ -58,7 +82,27 @@ export function DocumentViewer({ documentId, highlightedExcerpt = null }: Props)
       ) : visibleError ? (
         <p className="mt-6 text-sm text-rose-400">{visibleError}</p>
       ) : visibleContent ? (
-        <pre className="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-950/70 p-4 font-mono text-xs leading-6 text-slate-300">
+        <>
+          <div className="mt-4 flex gap-2 border-b border-slate-800 pb-3">
+            {(["legal", "layman"] as const).map((style) => (
+              <button
+                className={`rounded px-3 py-1.5 text-xs ${summaryStyle === style ? "bg-amber-400 text-slate-950" : "text-slate-400 hover:text-slate-100"}`}
+                key={style}
+                onClick={() => void loadSummary(style)}
+                type="button"
+              >
+                {style === "legal" ? "Legal summary" : "Plain-English summary"}
+              </button>
+            ))}
+          </div>
+          {summaryLoading ? <p className="mt-4 text-sm text-slate-400">Generating summary…</p> : null}
+          {summaryError ? <p className="mt-4 text-sm text-rose-400">{summaryError}</p> : null}
+          {summary && summary.style === summaryStyle && !summaryLoading ? (
+            <p className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-950/70 p-4 text-sm leading-6 text-slate-300">
+              {summary.summary}
+            </p>
+          ) : null}
+          <pre className="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-950/70 p-4 font-mono text-xs leading-6 text-slate-300">
           {highlightedExcerpt && visibleContent.text.includes(highlightedExcerpt) ? (
             <>
               {visibleContent.text.split(highlightedExcerpt)[0]}
@@ -70,7 +114,8 @@ export function DocumentViewer({ documentId, highlightedExcerpt = null }: Props)
           ) : (
             visibleContent.text
           )}
-        </pre>
+          </pre>
+        </>
       ) : null}
     </section>
   );

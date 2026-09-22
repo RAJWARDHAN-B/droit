@@ -22,7 +22,7 @@ from ..core.ingestion import (
     load_document,
 )
 from ..core.pii import anonymize_text, encrypt_value
-from ..core.risk import RiskEnricher, score_document_risk
+from ..core.risk import RiskAssessment, RiskEnricher, score_document_risk
 from ..models import (
     Document,
     DocumentChunk,
@@ -184,7 +184,7 @@ async def ingest_document(
     if existing is not None:
         return existing, False
 
-    organization = await _get_or_create_organization(session, settings.default_org_id)
+    organization = await get_or_create_organization(session, settings.default_org_id)
     await session.flush()
     document_id = uuid4()
     original_path = settings.upload_directory / f"{document_id}_original{suffix}"
@@ -211,6 +211,7 @@ async def ingest_document(
             score_document_risk,
             anonymized_text,
             pii_density=pii_density,
+            weights=settings.risk_weights,
         )
         if risk_enricher is not None and settings.llm_api_key is not None:
             try:
@@ -221,6 +222,10 @@ async def ingest_document(
                 logger.warning(
                     "LLM risk enrichment failed; retaining heuristic assessment",
                     exc_info=True,
+                )
+                risk_assessment = RiskAssessment(
+                    score=risk_assessment.score,
+                    breakdown={**risk_assessment.breakdown, "llm_status": "failed"},
                 )
         await asyncio.to_thread(
             _write_atomic, anonymized_text_path, anonymized_text.encode("utf-8")
@@ -306,7 +311,7 @@ async def _find_job_by_key(
     return result.scalar_one_or_none()
 
 
-async def _get_or_create_organization(
+async def get_or_create_organization(
     session: AsyncSession, slug: str
 ) -> Organization:
     result = await session.execute(select(Organization).where(Organization.slug == slug))

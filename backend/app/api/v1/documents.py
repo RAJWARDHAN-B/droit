@@ -3,15 +3,19 @@
 from typing import Annotated
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_session
 from ...core.auth import current_user
+from ...core.generation import LLMGenerator
 from ...models import User
 from ...schemas import (
     DocumentContent,
     DocumentSummary,
+    DocumentSummaryRequest,
+    DocumentSummaryText,
     PasteDocumentRequest,
     ProcessingJobResponse,
 )
@@ -23,6 +27,8 @@ from ...services.documents import (
     job_response,
     list_documents,
 )
+from ...services.settings import effective_settings
+from ...services.summaries import generate_summary
 
 router = APIRouter(tags=["documents"])
 
@@ -109,6 +115,38 @@ async def document_content(
     if content is None:
         raise HTTPException(status_code=404, detail="Document content not found")
     return content
+
+
+@router.post("/documents/{document_id}/summary", response_model=DocumentSummaryText)
+async def document_summary(
+    document_id: UUID,
+    payload: DocumentSummaryRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _: Annotated[User | None, Depends(current_user)],
+) -> DocumentSummaryText:
+    effective = await effective_settings(session, request.app.state.settings)
+    generator = request.app.state.generator
+    if isinstance(generator, LLMGenerator):
+        generator = LLMGenerator(effective)
+    try:
+        summary = await generate_summary(
+            session,
+            effective,
+            document_id,
+            style=payload.style,
+            refresh=payload.refresh,
+            generator=generator,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502, detail="The language model provider is unavailable"
+        ) from exc
+    if summary is None:
+        raise HTTPException(status_code=404, detail="Document content not found")
+    return summary
 
 
 @router.get("/jobs/{job_id}", response_model=ProcessingJobResponse)

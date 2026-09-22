@@ -27,12 +27,19 @@
 - Dedicated authentication, settings, and audit coverage is present.
 - JWT 401 responses now clear the browser session and redirect app routes to login.
 - Browser sessions use an httpOnly `droit_session` cookie; `/auth/me` validates it and `/auth/logout` clears it.
+- Legal and layman summaries are available per document and cached by style.
+- Conversation history is persisted with anonymized messages and citations.
+- Risk assessment now covers ten clause categories with configurable weights, severity, source spans, and enrichment status.
 - Readiness reports PostgreSQL and Qdrant dependency status, and unexpected errors include a request ID.
 
 ### Next checks
 
 - Begin product work only after deciding whether the deferred agent/MCP scope has a concrete consumer.
 - Set `DROIT_AUTH_REQUIRED=true`, a real `DROIT_JWT_SECRET`, and `DROIT_SESSION_COOKIE_SECURE=true` outside development.
+
+### Known gaps
+
+- Drafting is a UI shell only; the functional module is specified as Phase 5 in `implementation_plan.md`.
 
 ### Deferred
 

@@ -37,7 +37,11 @@ class GeneratedAnswer:
 
 class AnswerGenerator(Protocol):
     async def generate(
-        self, question: str, chunks: list[RetrievedChunk]
+        self,
+        question: str,
+        chunks: list[RetrievedChunk],
+        *,
+        system_prompt: str | None = None,
     ) -> GeneratedAnswer: ...
 
 
@@ -59,7 +63,11 @@ class LLMGenerator:
         self._client = client
 
     async def generate(
-        self, question: str, chunks: list[RetrievedChunk]
+        self,
+        question: str,
+        chunks: list[RetrievedChunk],
+        *,
+        system_prompt: str | None = None,
     ) -> GeneratedAnswer:
         if not chunks:
             raise ValueError("Cannot generate an answer without retrieved context")
@@ -84,9 +92,13 @@ class LLMGenerator:
         ).rstrip("/")
         prompt = build_prompt(question, chunks)
         if provider == "anthropic":
-            url, headers, payload = self._anthropic_request(base_url, api_key, prompt)
+            url, headers, payload = self._anthropic_request(
+                base_url, api_key, prompt, system_prompt or SYSTEM_PROMPT
+            )
         else:
-            url, headers, payload = self._openai_request(base_url, api_key, prompt)
+            url, headers, payload = self._openai_request(
+                base_url, api_key, prompt, system_prompt or SYSTEM_PROMPT
+            )
 
         data = await self._post(url, headers, payload)
         return GeneratedAnswer(
@@ -109,14 +121,18 @@ class LLMGenerator:
             raise ValueError(f"An API key is required for the '{provider}' provider")
         base_url = (self._settings.llm_base_url or _DEFAULT_BASE_URLS[provider]).rstrip("/")
         if provider == "anthropic":
-            url, headers, payload = self._anthropic_request(base_url, api_key, "Reply with OK.")
+            url, headers, payload = self._anthropic_request(
+                base_url, api_key, "Reply with OK.", SYSTEM_PROMPT
+            )
         else:
-            url, headers, payload = self._openai_request(base_url, api_key, "Reply with OK.")
+            url, headers, payload = self._openai_request(
+                base_url, api_key, "Reply with OK.", SYSTEM_PROMPT
+            )
         payload["max_tokens"] = 1
         await self._post(url, headers, payload)
 
     def _openai_request(
-        self, base_url: str, api_key: str, prompt: str
+        self, base_url: str, api_key: str, prompt: str, system_prompt: str
     ) -> tuple[str, dict[str, str], dict[str, Any]]:
         headers = {"Content-Type": "application/json"}
         if api_key:
@@ -125,14 +141,14 @@ class LLMGenerator:
             "model": self._settings.llm_model,
             "max_tokens": self._settings.llm_max_tokens,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
         }
         return f"{base_url}/chat/completions", headers, payload
 
     def _anthropic_request(
-        self, base_url: str, api_key: str, prompt: str
+        self, base_url: str, api_key: str, prompt: str, system_prompt: str
     ) -> tuple[str, dict[str, str], dict[str, Any]]:
         headers = {
             "Content-Type": "application/json",
@@ -142,7 +158,7 @@ class LLMGenerator:
         payload = {
             "model": self._settings.llm_model,
             "max_tokens": self._settings.llm_max_tokens,
-            "system": SYSTEM_PROMPT,
+            "system": system_prompt,
             "messages": [{"role": "user", "content": prompt}],
         }
         return f"{base_url}/messages", headers, payload

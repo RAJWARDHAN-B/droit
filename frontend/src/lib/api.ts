@@ -61,6 +61,38 @@ export type CurrentUser = {
   role: string;
 };
 
+export type SummaryStyle = "legal" | "layman";
+
+export type DocumentSummaryText = {
+  document_id: string;
+  style: SummaryStyle;
+  summary: string;
+  provider: string;
+  model: string;
+  generated_at: string;
+  cached: boolean;
+};
+
+export type ConversationMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: Citation[];
+  provider: string | null;
+  model: string | null;
+  created_at: string;
+};
+
+export type Conversation = {
+  id: string;
+  title: string;
+  document_id: string | null;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+  messages: ConversationMessage[];
+};
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = await response.json();
@@ -173,6 +205,45 @@ export function deleteDocument(documentId: string): Promise<void> {
 
 export function getDocumentContent(documentId: string): Promise<DocumentContent> {
   return request<DocumentContent>(`/documents/${documentId}/content`);
+}
+
+export function getDocumentSummary(
+  documentId: string,
+  style: SummaryStyle,
+  refresh = false,
+): Promise<DocumentSummaryText> {
+  return request<DocumentSummaryText>(`/documents/${documentId}/summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ style, refresh }),
+  });
+}
+
+export function createConversation(documentId: string | null): Promise<Conversation> {
+  return request<Conversation>("/conversations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ document_id: documentId }),
+  });
+}
+
+export function listConversations(): Promise<Conversation[]> {
+  return request<Conversation[]>("/conversations");
+}
+
+export function getConversation(conversationId: string): Promise<Conversation> {
+  return request<Conversation>(`/conversations/${conversationId}`);
+}
+
+export function sendConversationMessage(
+  conversationId: string,
+  question: string,
+): Promise<Conversation> {
+  return request<Conversation>(`/conversations/${conversationId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
 }
 
 export function askQuestion(

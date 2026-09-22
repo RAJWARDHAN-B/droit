@@ -99,6 +99,8 @@ The first `POST /api/v1/auth/register` call creates the initial organization adm
 
 Queries return anonymized aliases by default. Setting `reveal_pii=true` requires an analyst or admin token and creates an audit record. Admin-only LLM settings are available at `/api/v1/settings/llm`; API keys are encrypted before storage.
 
+Documents support cached legal and plain-English summaries at `/api/v1/documents/{id}/summary`. Conversations can be persisted and reopened through `/api/v1/conversations`; stored messages retain aliases and citations, never original PII.
+
 Read [SECURITY.md](SECURITY.md), [PLAN.md](PLAN.md), and the applicable [AGENTS.md](AGENTS.md) before changing sensitive workflows.
 
 ## Configuration
@@ -127,6 +129,12 @@ All settings are controlled via `.env` (copy from `.env.example`):
 | `DROIT_SESSION_COOKIE_NAME` | `droit_session` | Browser session cookie name |
 | `DROIT_SESSION_COOKIE_SECURE` | `false` | Send the session cookie over HTTPS only |
 | `DROIT_SESSION_COOKIE_SAMESITE` | `lax` | Session cookie SameSite policy |
+| `DROIT_RISK_WEIGHT_MISSING_CLAUSE` | `8.0` | Points per missing clause finding |
+| `DROIT_RISK_WEIGHT_ASYMMETRIC_TERM` | `5.0` | Points per asymmetric phrase |
+| `DROIT_RISK_WEIGHT_AUTO_RENEWAL` | `15.0` | Points for auto-renewal findings |
+| `DROIT_RISK_WEIGHT_JURISDICTION` | `15.0` | Points for missing governing law |
+| `DROIT_RISK_WEIGHT_PII_DENSITY` | `10.0` | Maximum PII density points |
+| `DROIT_RISK_MAX_ASYMMETRY_SCORE` | `20.0` | Cap for asymmetric phrase points |
 
 ---
 

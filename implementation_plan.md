@@ -16,10 +16,16 @@ The active priority is to secure and stabilize the existing workflow before addi
 - Optional structured LLM risk enrichment with heuristic fallback is implemented.
 - The current frontend supports pasted text, multi-file upload queues, processing-stage polling, document search and risk filters, deletion, anonymized document viewing, scoped queries, citations, and risk findings.
 
+### Recently implemented
+
+- Legal and layman summaries with per-style document caching and viewer tabs.
+- Persisted user-scoped conversations with citations, aliases, rename, reopen, and delete.
+- Expanded explainable risk assessment with ten clause categories, severity, source spans, configurable weights, and explicit LLM enrichment status.
+
 ### Remaining
 
-- Begin product work only after deciding whether the deferred agent/MCP scope has a concrete consumer.
-- Defer agents, MCP, Redis, workers, streaming, and content modules until a concrete consumer or measured bottleneck justifies them.
+- Legal document drafting is a UI shell only and is now planned as Phase 5.
+- Defer agents, MCP, Redis, workers, streaming, and marketing content until a concrete consumer or measured bottleneck justifies them.
 
 ---
 
@@ -322,7 +328,8 @@ frontend/
 - [x] Scope control for one document vs. all documents
 - [x] Citation entries select the relevant source document
 - [ ] Scroll to the cited chunk in the viewer
-- [ ] Summary panel: legal summary tab + layman summary tab
+- [ ] Summary panel: legal summary tab + layman summary tab (Phase 6.1)
+- [ ] Conversation history sidebar (Phase 6.2)
 
 **2.5 — Floating Chatbot (Info Pages)**
 - [ ] Floating icon (bottom-right) on all marketing/info pages
@@ -343,6 +350,8 @@ The protected backend settings API and frontend settings workflow are implemente
 - [ ] Text area for prompt input (disabled or non-functional)
 - [ ] Template picker UI (NDA, MSA, Employment Agreement)
 - [ ] "Generate Draft" button (disabled, shows tooltip: "Coming in next release")
+
+The functional drafting module is specified in Phase 5.
 
 ---
 
@@ -376,66 +385,116 @@ The protected backend settings API and frontend settings workflow are implemente
 
 ---
 
-## Phase 4 — Advanced Features & Polish
+## Phase 5 — Legal Doc Drafting Module
+**Goal**: Turn the drafting shell into a working generator that produces clause-structured legal drafts from a template, party inputs, and key terms.
+
+**Duration estimate**: 2–3 weeks
+
+**5.0 — Data model**
+- `draft_templates`: id, organization_id, slug, name, document_type, clause outline (JSON), is_builtin
+- `drafts`: id, organization_id, user_id, template_id, title, status (`draft`, `final`), inputs (JSON), created_at, updated_at
+- `draft_clauses`: id, draft_id, ordinal, heading, body, source (`generated`, `edited`, `template`), version
+- `draft_versions`: id, draft_id, version, snapshot (JSON), created_at, created_by
+- Every table carries `organization_id` and is scoped in queries like documents are.
+
+**5.1 — Drafting API** (`backend/app/api/v1/drafting.py`)
+- `GET /api/v1/drafting/templates` — list built-in and org templates
+- `POST /api/v1/drafting/drafts` — create a draft from a template plus structured inputs
+- `GET /api/v1/drafting/drafts` / `GET /api/v1/drafting/drafts/{id}` — list and load
+- `PUT /api/v1/drafting/drafts/{id}/clauses/{clause_id}` — manual clause edit; snapshots a new version
+- `POST /api/v1/drafting/drafts/{id}/clauses/{clause_id}/regenerate` — regenerate one clause with surrounding context
+- `POST /api/v1/drafting/drafts/{id}/export` — DOCX or PDF export
+- `DELETE /api/v1/drafting/drafts/{id}`
+- All routes require an authenticated user; export and delete are audited.
+
+**5.2 — Generation core** (`backend/app/core/drafting/`)
+- `generator.py` reuses the existing provider-agnostic `AnswerGenerator`; no new agent framework unless orchestration is actually needed
+- Structured Pydantic output per clause: `heading`, `body`, `rationale`, `risk_notes`
+- Clause-level regeneration receives the template outline, prior clause bodies, and user inputs as context
+- Party names and sensitive inputs are aliased before the provider call and restored locally, reusing `core/pii`
+- Generated drafts are scored by the existing risk scorer so a draft carries the same explainable breakdown as an uploaded document
+
+**5.3 — Template library**
+- Built-in seeded templates: NDA, MSA, SOW, Employment Agreement, IP Assignment
+- Each template defines a required-input schema and an ordered clause outline
+- Organization-authored templates are stored alongside built-ins and never shared across organizations
+
+**5.4 — Drafting editor UI** (`frontend/src/app/(app)/drafting/`)
+- Template picker, structured input form driven by the template schema
+- Clause-by-clause editor with per-clause "Regenerate" and inline rationale
+- Version history with restore
+- Export as DOCX or PDF
+- Risk panel reusing the existing risk badge and findings components
+
+**5.5 — Verification**
+- Unit tests for template seeding, clause parsing, and version snapshots
+- API tests for organization scoping, clause regeneration, and export authorization
+- Manual: create an NDA draft, regenerate the confidentiality clause, export, and confirm no original party names reached the provider payload
+
+---
+
+## Phase 6 — Summaries, Conversations, and Risk Depth
+**Goal**: Close the gaps between the current query API and the reviewing workflow analysts expect.
+
+**6.1 — Dual summaries**
+- `POST /api/v1/documents/{id}/summary` with `style` of `legal` or `layman`
+- Legal style preserves defined terms and clause references; layman style uses plain language and explains obligations
+- Summaries are generated from anonymized text, cached on the document row, and invalidated on re-index
+- Frontend: summary tabs in the document viewer
+
+**6.2 — Persisted conversations**
+- `conversations` and `messages` tables scoped by organization, user, and optional document
+- `POST /api/v1/conversations`, `GET /api/v1/conversations`, `GET /api/v1/conversations/{id}`, `POST /api/v1/conversations/{id}/messages`
+- Stored messages retain aliases; revealed PII is never persisted
+- Citations are stored per assistant message so history reopens with working source links
+- Frontend: conversation sidebar, resume, rename, delete
+
+**6.3 — Risk depth**
+- Expand the clause dictionary beyond indemnification, liability, termination, and governing law to include confidentiality, IP ownership, payment terms, dispute resolution, data protection, and assignment
+- Attach a character span and chunk reference to each finding so the viewer can scroll to the cause
+- Add severity levels and configurable weights instead of fixed point values
+- `POST /api/v1/documents/{id}/risk/recompute` for re-scoring after weight or dictionary changes
+- Record LLM enrichment failures in the breakdown rather than silently falling back
+
+---
+
+## Phase 7 — Advanced Features & Polish
 **Goal**: Add power features, evaluation pipeline, performance, and production hardening.
 
 **Duration estimate**: 3–4 weeks
 
-**4.1 — Document Comparison Mode**
+**7.1 — Document Comparison Mode**
 - Select 2 documents → generate side-by-side diff of key clauses
 - Powered by LLM structured extraction + visual diff rendering
 
-**4.2 — Clause Extraction & Library**
+**7.2 — Clause Extraction & Library**
 - Extract all clauses by type (termination, IP, liability, confidentiality) across all docs
 - Searchable clause library view
 
-**4.3 — Annotation Layer**
+**7.3 — Annotation Layer**
 - Highlight text in document viewer → add note
 - Notes stored per-doc-per-user in DB
 - Exportable as PDF report
 
-**4.4 — Timeline View**
+**7.4 — Timeline View**
 - Extract all dates/obligations → visual timeline component
 
-**4.5 — RAG Evaluation Pipeline (RAGAS)**
+**7.5 — RAG Evaluation Pipeline (RAGAS)**
 - Integrate existing RAGAS evaluation code into a backend job
 - Expose evaluation scores in an admin dashboard
 
-**4.6 — Audit Trail**
-- Every query/answer logged: user, timestamp, query, retrieved_chunks, answer, doc_id
-- Admin view in settings page
+**7.6 — Query Audit Trail**
+- Log every query and answer: user, timestamp, query, retrieved chunks, answer, document
+- Admin view in the settings page
 
-**4.7 — Export Answers**
+**7.7 — Export Answers**
 - "Export as PDF" button on chat responses
 - PDF includes: query, answer, citations, document name, timestamp
 
-**4.8 — Performance Hardening**
-- Background task queue (Celery + Redis) for document processing jobs
+**7.8 — Performance Hardening**
+- Background task queue (Celery + Redis) for document processing jobs, only once upload latency is measured as a problem
 - Streaming responses for LLM answers (Server-Sent Events)
-- Caching: Redis cache for repeated queries on same doc
-
----
-
-## Phase 5 — Legal Doc Drafting Module (Future Scope)
-**Goal**: Implement the document drafting module (Phase 4 shell becomes functional).
-
-**Duration estimate**: 2–3 weeks
-
-**5.1 — Drafting Agent**
-- New `DraftingAgent` in Pydantic AI
-- Takes: document type, party names, key terms
-- Generates: structured draft with clause-by-clause breakdown
-- Re-uses PII replacement for party aliases
-
-**5.2 — Drafting Editor UI**
-- Rich text editor (Tiptap or Quill)
-- Clause-level regeneration: click a clause → "Regenerate this clause"
-- Version history
-- Export as DOCX / PDF
-
-**5.3 — Template Library**
-- Pre-built templates: NDA, MSA, SOW, Employment Agreement, IP Assignment
-- Community templates (future)
+- Caching: Redis cache for repeated queries on the same document
 
 ---
 
