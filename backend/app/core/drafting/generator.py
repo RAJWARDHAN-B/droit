@@ -35,6 +35,15 @@ def anonymize_inputs(inputs: dict[str, str]) -> tuple[dict[str, str], dict[str, 
     return sanitized, aliases
 
 
+def anonymize_text(text: str, aliases: dict[str, str]) -> str:
+    """Replace restored values with their aliases before the text reaches a provider."""
+    for alias, value in sorted(aliases.items(), key=lambda item: len(item[1]), reverse=True):
+        if not value.strip():
+            continue
+        text = re.sub(re.escape(value), alias, text, flags=re.IGNORECASE)
+    return text
+
+
 def restore_aliases(clause: GeneratedClause, aliases: dict[str, str]) -> GeneratedClause:
     values = clause.model_dump()
     values["body"] = _restore(values["body"], aliases)
@@ -60,8 +69,9 @@ async def generate_clause(
         "clause_heading": clause_heading,
         "clause_outline": clause_outline,
         "inputs": sanitized,
-        "prior_clauses": prior_clauses,
-        "instruction": instruction or "",
+        # Stored clause bodies carry restored values, so they must be aliased again here.
+        "prior_clauses": [anonymize_text(clause, aliases) for clause in prior_clauses],
+        "instruction": anonymize_text(instruction or "", aliases),
         "output_schema": {
             "heading": "string",
             "body": "string",

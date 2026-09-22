@@ -6,6 +6,12 @@ from io import BytesIO
 from uuid import UUID
 
 from docx import Document as DocxDocument
+from reportlab.lib.enums import TA_JUSTIFY
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from slugify import slugify
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -29,6 +35,7 @@ from ..schemas import (
     DraftDetail,
     DraftSummary,
     DraftTemplateResponse,
+    DraftVersionResponse,
 )
 from .documents import get_or_create_organization
 
@@ -132,6 +139,70 @@ async def list_templates(session: AsyncSession, settings: Settings) -> list[Draf
     return [_template_response(template) for template in result.scalars().all()]
 
 
+async def create_template(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    name: str,
+    document_type: str,
+    input_schema: dict[str, dict[str, object]],
+    clause_outline: list[dict[str, object]],
+) -> DraftTemplateResponse:
+    organization = await get_or_create_organization(session, settings.default_org_id)
+    await _ensure_builtins(session, organization.id)
+    template = DraftTemplate(
+        organization_id=organization.id,
+        slug=await _unique_slug(session, organization.id, name),
+        name=name,
+        document_type=document_type,
+        input_schema=input_schema,
+        clause_outline=clause_outline,
+        is_builtin=False,
+    )
+    session.add(template)
+    await session.flush()
+    return _template_response(template)
+
+
+async def update_template(
+    session: AsyncSession,
+    settings: Settings,
+    template_id: UUID,
+    *,
+    name: str,
+    document_type: str,
+    input_schema: dict[str, dict[str, object]],
+    clause_outline: list[dict[str, object]],
+) -> DraftTemplateResponse | None:
+    template = await _load_template(session, settings, template_id)
+    if template is None:
+        return None
+    if template.is_builtin:
+        raise PermissionError("Built-in templates cannot be modified")
+    template.name = name
+    template.document_type = document_type
+    template.input_schema = input_schema
+    template.clause_outline = clause_outline
+    await session.flush()
+    return _template_response(template)
+
+
+async def delete_template(session: AsyncSession, settings: Settings, template_id: UUID) -> bool:
+    template = await _load_template(session, settings, template_id)
+    if template is None:
+        return False
+    if template.is_builtin:
+        raise PermissionError("Built-in templates cannot be deleted")
+    in_use = await session.scalar(
+        select(Draft.id).where(Draft.template_id == template.id).limit(1)
+    )
+    if in_use is not None:
+        raise ValueError("This template is still used by existing drafts")
+    await session.delete(template)
+    await session.flush()
+    return True
+
+
 async def create_draft(
     session: AsyncSession,
     settings: Settings,
@@ -161,8 +232,8 @@ async def create_draft(
         risk_breakdown={},
     )
     session.add(draft)
-    await session.flush()
-    await _generate_all(session, draft, template, inputs, generator)
+    # The draft stays pending until the clauses exist, so appending never triggers a lazy load.
+    await _generate_all(draft, template, inputs, generator)
     _snapshot(draft, user)
     await session.flush()
     return _detail(draft)
@@ -244,6 +315,47 @@ async def delete_draft(session: AsyncSession, settings: Settings, draft_id: UUID
     return True
 
 
+async def list_versions(
+    session: AsyncSession, settings: Settings, draft_id: UUID, user: User
+) -> list[DraftVersionResponse] | None:
+    draft = await _load(session, settings, draft_id, user)
+    if draft is None:
+        return None
+    return [_version_response(version) for version in draft.versions]
+
+
+async def restore_version(
+    session: AsyncSession, settings: Settings, draft_id: UUID, version: int, *, user: User
+) -> DraftDetail | None:
+    draft = await _load(session, settings, draft_id, user)
+    if draft is None:
+        return None
+    snapshot = next((item for item in draft.versions if item.version == version), None)
+    if snapshot is None:
+        return None
+    clauses = list(snapshot.snapshot.get("clauses", []))
+    draft.title = str(snapshot.snapshot.get("title", draft.title))
+    draft.clauses.clear()
+    # The clause ordinals are unique per draft, so the removals must land before the inserts.
+    await session.flush()
+    for ordinal, clause in enumerate(clauses):
+        draft.clauses.append(
+            DraftClause(
+                organization_id=draft.organization_id,
+                ordinal=ordinal,
+                heading=str(clause.get("heading", "")),
+                body=str(clause.get("body", "")),
+                rationale=str(clause.get("rationale", "")),
+                risk_notes=list(clause.get("risk_notes", [])),
+                source=DraftClauseSource(str(clause.get("source", DraftClauseSource.TEMPLATE.value))),
+            )
+        )
+    _refresh_risk(draft)
+    _snapshot(draft, user)
+    await session.flush()
+    return _detail(draft)
+
+
 def export_docx(draft: DraftDetail) -> bytes:
     document = DocxDocument()
     document.add_heading(draft.title, level=0)
@@ -255,6 +367,36 @@ def export_docx(draft: DraftDetail) -> bytes:
     return output.getvalue()
 
 
+def export_pdf(draft: DraftDetail) -> bytes:
+    output = BytesIO()
+    styles = getSampleStyleSheet()
+    body_style = ParagraphStyle(
+        "DraftBody", parent=styles["BodyText"], alignment=TA_JUSTIFY, leading=15
+    )
+    document = SimpleDocTemplate(
+        output,
+        pagesize=A4,
+        title=draft.title,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+    )
+    flowables = [Paragraph(_escape_pdf(draft.title), styles["Title"]), Spacer(1, 6 * mm)]
+    for clause in draft.clauses:
+        flowables.append(Paragraph(_escape_pdf(clause.heading), styles["Heading2"]))
+        for paragraph in clause.body.split("\n"):
+            if paragraph.strip():
+                flowables.append(Paragraph(_escape_pdf(paragraph), body_style))
+        flowables.append(Spacer(1, 4 * mm))
+    document.build(flowables)
+    return output.getvalue()
+
+
+def _escape_pdf(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 async def _ensure_builtins(session: AsyncSession, organization_id: UUID) -> None:
     existing = set((await session.scalars(select(DraftTemplate.slug).where(DraftTemplate.organization_id == organization_id))).all())
     for definition in _BUILTIN_TEMPLATES:
@@ -263,7 +405,7 @@ async def _ensure_builtins(session: AsyncSession, organization_id: UUID) -> None
     await session.flush()
 
 
-async def _generate_all(session: AsyncSession, draft: Draft, template: DraftTemplate, inputs: dict[str, str], generator: AnswerGenerator) -> None:
+async def _generate_all(draft: Draft, template: DraftTemplate, inputs: dict[str, str], generator: AnswerGenerator) -> None:
     prior: list[str] = []
     for ordinal, outline in enumerate(template.clause_outline):
         generated = await generate_clause(
@@ -299,10 +441,48 @@ def _snapshot(draft: Draft, user: User) -> None:
         version=version,
         created_by=user.id,
         snapshot={"title": draft.title, "clauses": [
-            {"heading": clause.heading, "body": clause.body, "source": clause.source.value}
+            {
+                "heading": clause.heading,
+                "body": clause.body,
+                "rationale": clause.rationale,
+                "risk_notes": list(clause.risk_notes),
+                "source": clause.source.value,
+            }
             for clause in draft.clauses
         ]},
     ))
+
+
+async def _load_template(
+    session: AsyncSession, settings: Settings, template_id: UUID
+) -> DraftTemplate | None:
+    organization = await get_or_create_organization(session, settings.default_org_id)
+    return await session.scalar(
+        select(DraftTemplate).where(
+            DraftTemplate.id == template_id,
+            DraftTemplate.organization_id == organization.id,
+        )
+    )
+
+
+async def _unique_slug(session: AsyncSession, organization_id: UUID, name: str) -> str:
+    base = slugify(name)[:90] or "template"
+    taken = set(
+        (
+            await session.scalars(
+                select(DraftTemplate.slug).where(
+                    DraftTemplate.organization_id == organization_id,
+                    DraftTemplate.slug.like(f"{base}%"),
+                )
+            )
+        ).all()
+    )
+    if base not in taken:
+        return base
+    suffix = 2
+    while f"{base}-{suffix}" in taken:
+        suffix += 1
+    return f"{base}-{suffix}"
 
 
 async def _load(session: AsyncSession, settings: Settings, draft_id: UUID, user: User) -> Draft | None:
@@ -324,6 +504,16 @@ def _validate_inputs(template: DraftTemplate, inputs: dict[str, str]) -> None:
 
 def _template_response(template: DraftTemplate) -> DraftTemplateResponse:
     return DraftTemplateResponse.model_validate(template, from_attributes=True)
+
+
+def _version_response(version: DraftVersion) -> DraftVersionResponse:
+    return DraftVersionResponse(
+        version=version.version,
+        title=str(version.snapshot.get("title", "")),
+        clause_count=len(version.snapshot.get("clauses", [])),
+        created_by=version.created_by,
+        created_at=version.created_at,
+    )
 
 
 def _summary(draft: Draft) -> DraftSummary:

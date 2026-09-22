@@ -1,5 +1,5 @@
 """Structured legal draft generation."""
 
-from .generator import generate_clause
+from .generator import anonymize_text, generate_clause
 
-__all__ = ["generate_clause"]
+__all__ = ["anonymize_text", "generate_clause"]
