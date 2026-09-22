@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -53,6 +54,9 @@ class Settings(BaseSettings):
     auth_required: bool = False
     jwt_secret: SecretStr = SecretStr("change-this-development-secret")
     jwt_expire_minutes: int = 60
+    session_cookie_name: str = "droit_session"
+    session_cookie_secure: bool = False
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
 
     @property
     def upload_directory(self) -> Path:

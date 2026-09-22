@@ -8,7 +8,7 @@ Droit is being evolved from a CLI-based legal RAG pipeline into a **full-stack, 
 
 ### Active milestone (2026-09-19)
 
-The active priority is to secure and stabilize the existing workflow before adding distributed infrastructure or additional product modules. Authentication, role checks, audited PII reveal, persisted encrypted LLM settings, focused end-to-end tests, route separation, and operational error handling are the current release gate.
+The active priority is to secure and stabilize the existing workflow before adding distributed infrastructure or additional product modules. Authentication, role checks, audited PII reveal, persisted encrypted LLM settings, focused end-to-end tests, route separation, and operational error handling are the current release gate. Browser sessions now use an httpOnly cookie instead of `localStorage`.
 
 ### Done
 
@@ -18,10 +18,7 @@ The active priority is to secure and stabilize the existing workflow before addi
 
 ### Remaining
 
-- Add dedicated authentication, settings, and audit assertions beyond the current workflow coverage.
-- Replace browser-only JWT storage with a server-side or httpOnly-cookie session before production deployment.
 - Begin product work only after deciding whether the deferred agent/MCP scope has a concrete consumer.
-- Add dependency diagnostics to readiness and structured error reporting.
 - Defer agents, MCP, Redis, workers, streaming, and content modules until a concrete consumer or measured bottleneck justifies them.
 
 ---

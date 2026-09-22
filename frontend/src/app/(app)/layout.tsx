@@ -3,26 +3,38 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { getCurrentUser, logout as endSession } from "@/lib/api";
+
 export default function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    if (window.localStorage.getItem("droit_access_token")) {
-      queueMicrotask(() => setAuthorized(true));
-    } else {
-      router.replace("/login");
-    }
+    let active = true;
+    getCurrentUser().then(
+      () => {
+        if (active) setAuthorized(true);
+      },
+      () => {
+        router.replace("/login");
+      },
+    );
     function handleExpired() {
       router.replace("/login");
     }
     window.addEventListener("droit:auth-expired", handleExpired);
-    return () => window.removeEventListener("droit:auth-expired", handleExpired);
+    return () => {
+      active = false;
+      window.removeEventListener("droit:auth-expired", handleExpired);
+    };
   }, [router]);
 
-  function logout() {
-    window.localStorage.removeItem("droit_access_token");
-    router.replace("/login");
+  async function logout() {
+    try {
+      await endSession();
+    } finally {
+      router.replace("/login");
+    }
   }
 
   if (!authorized) return <main className="min-h-screen bg-slate-950" />;

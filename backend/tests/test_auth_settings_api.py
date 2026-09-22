@@ -39,6 +39,7 @@ def test_bootstrap_login_and_admin_settings_are_audited(tmp_path: Path) -> None:
             )
             token = registration.json()["access_token"]
             headers = {"Authorization": f"Bearer {token}"}
+            client.cookies.clear()
 
             unauthenticated = client.get("/api/v1/settings/llm")
             saved = client.put(
@@ -74,5 +75,43 @@ def test_bootstrap_login_and_admin_settings_are_audited(tmp_path: Path) -> None:
                 await engine.dispose()
 
         assert asyncio.run(read_audit_details()) == {}
+    finally:
+        asyncio.run(_delete_test_organization(settings))
+
+
+def test_login_issues_httponly_session_cookie(tmp_path: Path) -> None:
+    settings = Settings(
+        storage_root=tmp_path,
+        default_org_id=f"test-{uuid4().hex}",
+        auth_required=True,
+    )
+
+    try:
+        with TestClient(create_app(settings)) as client:
+            client.post(
+                "/api/v1/auth/register",
+                json={"email": "admin@example.com", "password": "a-very-secure-password"},
+            )
+            client.cookies.clear()
+
+            login = client.post(
+                "/api/v1/auth/login",
+                json={"email": "admin@example.com", "password": "a-very-secure-password"},
+            )
+            cookie_header = login.headers["set-cookie"]
+
+            # The browser session relies on the cookie alone, with no Authorization header.
+            authenticated = client.get("/api/v1/auth/me")
+            logout = client.post("/api/v1/auth/logout")
+            after_logout = client.get("/api/v1/auth/me")
+
+        assert login.status_code == 200
+        assert settings.session_cookie_name in cookie_header
+        assert "HttpOnly" in cookie_header
+        assert "SameSite=lax" in cookie_header
+        assert authenticated.status_code == 200
+        assert authenticated.json()["role"] == "admin"
+        assert logout.status_code == 204
+        assert after_logout.status_code == 401
     finally:
         asyncio.run(_delete_test_organization(settings))

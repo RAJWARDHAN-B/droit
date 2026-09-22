@@ -55,6 +55,12 @@ export type LLMSettings = {
   api_key_configured: boolean;
 };
 
+export type CurrentUser = {
+  id: string;
+  email: string;
+  role: string;
+};
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = await response.json();
@@ -72,14 +78,13 @@ async function readError(response: Response): Promise<string> {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("droit_access_token") : null;
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, { ...init, headers });
+  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined") {
-      window.localStorage.removeItem("droit_access_token");
       window.dispatchEvent(new Event("droit:auth-expired"));
     }
     throw new Error(await readError(response));
@@ -90,13 +95,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function login(email: string, password: string): Promise<void> {
-  const result = await request<{ access_token: string }>("/auth/login", {
+export async function login(email: string, password: string): Promise<CurrentUser> {
+  const result = await request<{ user: CurrentUser }>("/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  window.localStorage.setItem("droit_access_token", result.access_token);
+  return result.user;
+}
+
+export function getCurrentUser(): Promise<CurrentUser> {
+  return request<CurrentUser>("/auth/me");
+}
+
+export function logout(): Promise<void> {
+  return request<void>("/auth/logout", { method: "POST" });
 }
 
 export function getLLMSettings(): Promise<LLMSettings> {

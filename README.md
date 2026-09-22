@@ -95,7 +95,7 @@ Qdrant and the embedding model are initialized lazily on the first vector operat
 
 ### Authentication and security
 
-The first `POST /api/v1/auth/register` call creates the initial organization admin. Use `POST /api/v1/auth/login` to obtain a bearer token. Set `DROIT_AUTH_REQUIRED=true` and a strong `DROIT_JWT_SECRET` outside local development.
+The first `POST /api/v1/auth/register` call creates the initial organization admin. Use `POST /api/v1/auth/login` to start a session. Browsers receive an httpOnly `droit_session` cookie and never store the token in JavaScript; non-browser clients can use the returned JWT as a bearer token. `GET /api/v1/auth/me` validates the session and `POST /api/v1/auth/logout` clears it. Set `DROIT_AUTH_REQUIRED=true`, a strong `DROIT_JWT_SECRET`, and `DROIT_SESSION_COOKIE_SECURE=true` outside local development.
 
 Queries return anonymized aliases by default. Setting `reveal_pii=true` requires an analyst or admin token and creates an audit record. Admin-only LLM settings are available at `/api/v1/settings/llm`; API keys are encrypted before storage.
 
@@ -122,6 +122,11 @@ All settings are controlled via `.env` (copy from `.env.example`):
 | `DROIT_RETRIEVAL_RERANKER_CANDIDATE_LIMIT` | `12` | Fused candidates scored by the reranker |
 | `DROIT_ENVIRONMENT` | `development` | Runtime environment name |
 | `DROIT_DEBUG` | `false` | FastAPI debug mode |
+| `DROIT_AUTH_REQUIRED` | `false` | Reject unauthenticated API requests |
+| `DROIT_JWT_SECRET` | Development placeholder | HS256 signing secret for session tokens |
+| `DROIT_SESSION_COOKIE_NAME` | `droit_session` | Browser session cookie name |
+| `DROIT_SESSION_COOKIE_SECURE` | `false` | Send the session cookie over HTTPS only |
+| `DROIT_SESSION_COOKIE_SAMESITE` | `lax` | Session cookie SameSite policy |
 
 ---
 

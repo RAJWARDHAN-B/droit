@@ -58,14 +58,17 @@ async def current_user(
     session: Annotated[AsyncSession, Depends(get_session)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> User | None:
-    if credentials is None:
-        if request.app.state.settings.auth_required:
+    settings = request.app.state.settings
+    # Browsers authenticate with the httpOnly session cookie; API clients send a bearer token.
+    token = credentials.credentials if credentials else request.cookies.get(settings.session_cookie_name)
+    if not token:
+        if settings.auth_required:
             raise HTTPException(status_code=401, detail="Authentication required")
         return None
     try:
         payload = jwt.decode(
-            credentials.credentials,
-            request.app.state.settings.jwt_secret.get_secret_value(),
+            token,
+            settings.jwt_secret.get_secret_value(),
             algorithms=["HS256"],
         )
         user_id = UUID(str(payload["sub"]))
