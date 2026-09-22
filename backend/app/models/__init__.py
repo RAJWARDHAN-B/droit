@@ -8,6 +8,7 @@ from .pii_mapping import PIIMapping
 from .processing_job import ProcessingJob, ProcessingStage
 from .audit_log import AuditLog
 from .llm_setting import LLMSetting
+from .drafting import Draft, DraftClause, DraftClauseSource, DraftStatus, DraftTemplate, DraftVersion
 
 __all__ = [
     "Base",
@@ -25,4 +26,10 @@ __all__ = [
     "UserRole",
     "AuditLog",
     "LLMSetting",
+    "Draft",
+    "DraftClause",
+    "DraftClauseSource",
+    "DraftStatus",
+    "DraftTemplate",
+    "DraftVersion",
 ]

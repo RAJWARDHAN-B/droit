@@ -30,6 +30,7 @@
 - Legal and layman summaries are available per document and cached by style.
 - Conversation history is persisted with anonymized messages and citations.
 - Risk assessment now covers ten clause categories with configurable weights, severity, source spans, and enrichment status.
+- Legal drafting now supports organization-scoped built-in templates, generated clause drafts, version snapshots, editing, regeneration, risk scoring, audited DOCX export, and a working editor route.
 - Readiness reports PostgreSQL and Qdrant dependency status, and unexpected errors include a request ID.
 
 ### Next checks
@@ -39,7 +40,7 @@
 
 ### Known gaps
 
-- Drafting is a UI shell only; the functional module is specified as Phase 5 in `implementation_plan.md`.
+- PDF export remains unavailable until a PDF renderer is selected and configured.
 
 ### Deferred
 

@@ -93,6 +93,41 @@ export type Conversation = {
   messages: ConversationMessage[];
 };
 
+export type DraftTemplate = {
+  id: string;
+  slug: string;
+  name: string;
+  document_type: string;
+  input_schema: Record<string, { label: string; required?: boolean }>;
+  clause_outline: Array<{ heading: string; purpose?: string }>;
+  is_builtin: boolean;
+};
+
+export type DraftClause = {
+  id: string;
+  ordinal: number;
+  heading: string;
+  body: string;
+  rationale: string;
+  risk_notes: string[];
+  source: "generated" | "edited" | "template";
+  version: number;
+};
+
+export type Draft = {
+  id: string;
+  title: string;
+  template_id: string;
+  status: "draft" | "final";
+  updated_at: string;
+  inputs: Record<string, string>;
+  risk_breakdown: Record<string, unknown>;
+  clauses: DraftClause[];
+  version: number;
+};
+
+export type DraftSummary = Pick<Draft, "id" | "title" | "template_id" | "status" | "updated_at">;
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = await response.json();
@@ -258,4 +293,66 @@ export function askQuestion(
       document_id: documentId,
     }),
   });
+}
+
+export function listDraftTemplates(): Promise<DraftTemplate[]> {
+  return request<DraftTemplate[]>("/drafting/templates");
+}
+
+export function listDrafts(): Promise<DraftSummary[]> {
+  return request<DraftSummary[]>("/drafting/drafts");
+}
+
+export function createDraft(
+  templateId: string,
+  title: string,
+  inputs: Record<string, string>,
+): Promise<Draft> {
+  return request<Draft>("/drafting/drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ template_id: templateId, title, inputs }),
+  });
+}
+
+export function updateDraftClause(
+  draftId: string,
+  clauseId: string,
+  heading: string,
+  body: string,
+): Promise<Draft> {
+  return request<Draft>(`/drafting/drafts/${draftId}/clauses/${clauseId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ heading, body }),
+  });
+}
+
+export function regenerateDraftClause(
+  draftId: string,
+  clauseId: string,
+  instruction?: string,
+): Promise<Draft> {
+  return request<Draft>(`/drafting/drafts/${draftId}/clauses/${clauseId}/regenerate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instruction: instruction || null }),
+  });
+}
+
+export async function exportDraft(draftId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/drafting/drafts/${draftId}/export`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ format: "docx" }),
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "droit-draft.docx";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

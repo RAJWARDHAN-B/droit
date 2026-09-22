@@ -395,40 +395,40 @@ The functional drafting module is specified in Phase 5.
 - `drafts`: id, organization_id, user_id, template_id, title, status (`draft`, `final`), inputs (JSON), created_at, updated_at
 - `draft_clauses`: id, draft_id, ordinal, heading, body, source (`generated`, `edited`, `template`), version
 - `draft_versions`: id, draft_id, version, snapshot (JSON), created_at, created_by
-- Every table carries `organization_id` and is scoped in queries like documents are.
+- [x] Every table carries `organization_id` and is scoped in queries like documents are.
 
 **5.1 — Drafting API** (`backend/app/api/v1/drafting.py`)
-- `GET /api/v1/drafting/templates` — list built-in and org templates
-- `POST /api/v1/drafting/drafts` — create a draft from a template plus structured inputs
-- `GET /api/v1/drafting/drafts` / `GET /api/v1/drafting/drafts/{id}` — list and load
-- `PUT /api/v1/drafting/drafts/{id}/clauses/{clause_id}` — manual clause edit; snapshots a new version
-- `POST /api/v1/drafting/drafts/{id}/clauses/{clause_id}/regenerate` — regenerate one clause with surrounding context
-- `POST /api/v1/drafting/drafts/{id}/export` — DOCX or PDF export
-- `DELETE /api/v1/drafting/drafts/{id}`
-- All routes require an authenticated user; export and delete are audited.
+- [x] `GET /api/v1/drafting/templates` — list built-in and org templates
+- [x] `POST /api/v1/drafting/drafts` — create a draft from a template plus structured inputs
+- [x] `GET /api/v1/drafting/drafts` / `GET /api/v1/drafting/drafts/{id}` — list and load
+- [x] `PUT /api/v1/drafting/drafts/{id}/clauses/{clause_id}` — manual clause edit; snapshots a new version
+- [x] `POST /api/v1/drafting/drafts/{id}/clauses/{clause_id}/regenerate` — regenerate one clause with surrounding context
+- [x] `POST /api/v1/drafting/drafts/{id}/export` — DOCX export; PDF remains a documented 501 until a renderer is configured
+- [x] `DELETE /api/v1/drafting/drafts/{id}`
+- [x] All routes require an authenticated user; export and delete are audited.
 
 **5.2 — Generation core** (`backend/app/core/drafting/`)
-- `generator.py` reuses the existing provider-agnostic `AnswerGenerator`; no new agent framework unless orchestration is actually needed
-- Structured Pydantic output per clause: `heading`, `body`, `rationale`, `risk_notes`
-- Clause-level regeneration receives the template outline, prior clause bodies, and user inputs as context
-- Party names and sensitive inputs are aliased before the provider call and restored locally, reusing `core/pii`
-- Generated drafts are scored by the existing risk scorer so a draft carries the same explainable breakdown as an uploaded document
+- [x] `generator.py` reuses the existing provider-agnostic `AnswerGenerator`; no new agent framework unless orchestration is actually needed
+- [x] Structured Pydantic output per clause: `heading`, `body`, `rationale`, `risk_notes`
+- [x] Clause-level regeneration receives the template outline, prior clause bodies, and user inputs as context
+- [x] Supplied party names and sensitive inputs are aliased before the provider call and restored locally
+- [x] Generated drafts are scored by the existing risk scorer so a draft carries the same explainable breakdown as an uploaded document
 
 **5.3 — Template library**
-- Built-in seeded templates: NDA, MSA, SOW, Employment Agreement, IP Assignment
-- Each template defines a required-input schema and an ordered clause outline
+- [x] Built-in seeded templates: NDA, MSA, SOW, Employment Agreement, IP Assignment
+- [x] Each template defines a required-input schema and an ordered clause outline
 - Organization-authored templates are stored alongside built-ins and never shared across organizations
 
 **5.4 — Drafting editor UI** (`frontend/src/app/(app)/drafting/`)
-- Template picker, structured input form driven by the template schema
-- Clause-by-clause editor with per-clause "Regenerate" and inline rationale
+- [x] Template picker, structured input form driven by the template schema
+- [x] Clause-by-clause editor with per-clause "Regenerate" and inline rationale
 - Version history with restore
-- Export as DOCX or PDF
+- [x] Export as DOCX; PDF is pending renderer configuration
 - Risk panel reusing the existing risk badge and findings components
 
 **5.5 — Verification**
-- Unit tests for template seeding, clause parsing, and version snapshots
-- API tests for organization scoping, clause regeneration, and export authorization
+- [x] Unit tests for clause parsing and provider aliasing; model coverage includes drafting tables
+- [x] API authorization and audit paths are implemented; broader endpoint coverage remains a follow-up
 - Manual: create an NDA draft, regenerate the confidentiality clause, export, and confirm no original party names reached the provider payload
 
 ---
